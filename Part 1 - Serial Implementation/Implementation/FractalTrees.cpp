@@ -1,4 +1,3 @@
-#include "shared/workingWithDegrees.h"
 #include "shared/jbutil.h"
 #include <iostream>
 #include <cstdlib>
@@ -7,17 +6,22 @@
 #include <climits>
 
 using std::cout;
+using std::cerr;
 using std::endl;
 using std::string;
 
 using jbutil::matrix;
 using jbutil::image;
 
+float degrees_to_radians(int degrees);
+void populate_sin_map(float* sin_map);
+void populate_cos_map(float* cos_map);
+
 void calculcate_points(
 		float* pointsX, float* pointsY,
 		short* angles,
 		const float* sin_map, const float* cos_map,
-		const float line_length, const float length_decrease,
+		const float line_length, const float length_multiplier,
 		const int rotation_angle_degrees,
 		const unsigned long long no_of_points,
 		float &maxX, float &minY, float &maxY
@@ -47,23 +51,45 @@ void draw_line(
 // Inputs:
 //    int image_width - in pixels
 //    int image_height - in pixels
-//				int rotation_angle_degrees (The amount to rotate per iteration [must be prefectly divisible by 8, 0 < R < 180])
-//				float initial_length (length of first line)
-//    float length_decrease (percentge of next line in iteration)
-//    iterations (number of iterations)
-int main(){
-		int image_width = 512*8, image_height=512*8;
-		string outfile = "out.pgm";
-		float initial_length = 50; // Initial length of first line
-		float length_decrease = 1.1; // How much line gets smaller per iteration
-		int rotation_angle_degrees = 10; // How much to turn  per iteration (in degrees)
-		int iterations = 15; // Must be between 1 and 26 (both included) otherwise it uses too much memory, as memory usage is 10x2^iterations bytes
+//    string outfile - pgm image output name
+//    float length_multiplier (multiply the current line's length by this number
+//				int rotation_angle_degrees (The amount to rotate per iteration) must be between 0 and 180
+//    iterations (number of iterations) Must be between 1 and 26 (both included) otherwise it uses too much memory, as memory usage is 10x2^iterations bytes
+int main(int argc, char *argv[]){
 
+		if (argc != 7)
+		{
+				cout << "Error: wrong number of parameters\n"
+						<< "Usage:\n\t<output image width>\n\t<output image height>\n\t<output image name>.pgm\n\t" 
+						<< "<length multiplier per iteration>\n\t<rotation per iteration (in degrees) - between 0 and 180>\n\t<number of iterations - between 1 and 26>" << endl;
+				exit(1);
+		}
+
+		int image_width = atoi(argv[1]), image_height = atoi(argv[2]);
+		string outfile = argv[3];
+		float length_multiplier = atof(argv[4]);
+		float rotation_angle_degrees = atof(argv[5]);
+		int iterations = atoi(argv[6]);
+
+		if (1 > rotation_angle_degrees || rotation_angle_degrees > 180){
+				failwith("Please enter a number of angle degrees between 1 and 180");
+		}
+
+		if(1 > iterations || iterations > 26){
+				failwith("Please enter a number of iterations between 1 and 26, otherwise a memory overflow will occur");
+		}
+		//For testing
+		/* 
+		int image_width = 512, image_height=512;
+		string outfile = "out.pgm";
+		float length_multiplier = 1;
+		int rotation_angle_degrees = 20;
+		int iterations = 12;
+		*/
+
+		float initial_length = 1; 
 		// get the number of points we will have by the end
 		unsigned long long no_of_points = (1 << iterations); // 2^iterations
-
-		matrix<int> m_image;
-		m_image.resize(image_height, image_width);
 
 		// lists of the properties belonging to each point
 		short* angles = (short*)malloc(no_of_points * sizeof(short));
@@ -78,10 +104,8 @@ int main(){
 
 		double t = jbutil::gettime();
 
-		// Make image all white
-		matrix_fill_default(m_image, 255);
-		//
-		// call to use the sin and cosine maps defined in workingWithDegrees.h
+		float sin_map[360]; // maps angle i to its sin at index i+180 (-180 <= i <= 180)
+		float cos_map[360]; // maps angle i to its cos at index i+180 (-180 <= i <= 180)
 		populate_sin_map(sin_map);
 		populate_cos_map(cos_map);
 
@@ -92,12 +116,11 @@ int main(){
 				angles,
 				sin_map, cos_map,
 				initial_length,
-				length_decrease,
+				length_multiplier,
 				rotation_angle_degrees,
 				no_of_points,
 				maxX, minY, maxY
 		);
-
 
 		free(angles);
 
@@ -107,6 +130,11 @@ int main(){
 				pointsX, pointsY,
 				maxX, minY, maxY
 		);
+
+		// Inititalise matrix and make it all white
+		matrix<int> m_image;
+		m_image.resize(image_height, image_width);
+		matrix_fill_default(m_image, 255);
 
 		draw_lines(
 				no_of_points,
@@ -126,13 +154,29 @@ int main(){
 		std::cerr << "Time taken: " << t << "s" << endl;
 }
 
+float degrees_to_radians(int degrees){
+		return degrees * pi / 180;
+}
+
+void populate_sin_map(float* sin_map){
+		for(int i = -180; i < 179; i++){
+				sin_map[i+180] = sin(degrees_to_radians(i));
+		}
+}
+
+void populate_cos_map(float* cos_map){
+		for(int i = -180; i < 179; i++){
+				cos_map[i+180] = cos(degrees_to_radians(i));
+		}
+}
+
 // Populate pointsX, pointsY and angles
 void calculcate_points(
 		float* pointsX, float* pointsY,
 		short* angles,
 		const float* sin_map, const float* cos_map,
 		float line_length,
-		const float length_decrease,
+		const float length_multiplier,
 		const int rotation_angle_degrees,
 		const unsigned long long no_of_points,
 		float &maxX, float &minY, float &maxY
@@ -171,7 +215,7 @@ void calculcate_points(
 						minY = pointsY[i2];
 
 				if((p2_test & (p2_test - 1)) == 0) // check if p2_test is power of 2
-						line_length *= length_decrease;
+						line_length *= length_multiplier;
 		}
 }
 
