@@ -52,18 +52,18 @@ void draw_line(
 //    float length_decrease (percentge of next line in iteration)
 //    iterations (number of iterations)
 int main(){
-		int image_width = 512*2, image_height=512*2;
+		int image_width = 512*8, image_height=512*8;
 		string outfile = "out.pgm";
 		float initial_length = 50; // Initial length of first line
-		float length_decrease = 0.9f; // How much line gets smaller per iteration
-		int rotation_angle_degrees = 20; // How much to turn  per iteration (in degrees)
+		float length_decrease = 1.1; // How much line gets smaller per iteration
+		int rotation_angle_degrees = 10; // How much to turn  per iteration (in degrees)
 		int iterations = 15; // Must be between 1 and 26 (both included) otherwise it uses too much memory, as memory usage is 10x2^iterations bytes
 
 		// get the number of points we will have by the end
 		unsigned long long no_of_points = (1 << iterations); // 2^iterations
 
 		matrix<int> m_image;
-		m_image.resize(image_width, image_height);
+		m_image.resize(image_height, image_width);
 
 		// lists of the properties belonging to each point
 		short* angles = (short*)malloc(no_of_points * sizeof(short));
@@ -80,7 +80,7 @@ int main(){
 
 		// Make image all white
 		matrix_fill_default(m_image, 255);
-
+		//
 		// call to use the sin and cosine maps defined in workingWithDegrees.h
 		populate_sin_map(sin_map);
 		populate_cos_map(cos_map);
@@ -108,25 +108,15 @@ int main(){
 				maxX, minY, maxY
 		);
 
-		//cout << "(" << pointsX[no_of_points-1] << ", " <<  pointsY[no_of_points-1] << ")" << endl;
-		//cout << maxX << " " << minY << " " << maxY << endl;
-		//for(unsigned long long i = 0; i < no_of_points; ++i){
-				//cout << i << " (" << pointsX[i] << ", " << pointsY[i] << ")" << endl;
-		//}
-
-		//cout << m_image(0,0) << endl;
-
 		draw_lines(
 				no_of_points,
 				pointsX, pointsY,
 				m_image
 		);
 
-		draw_line(pointsX[0], pointsY[0], pointsX[1], pointsY[1], m_image);
-
 		t = jbutil::gettime() - t;
 
-		image<int> image_out = image<int>(image_width, image_height, 1, 255);
+		image<int> image_out = image<int>(image_height, image_width, 1, 255);
 		image_out.set_channel(0, m_image);
 
 		// save image
@@ -206,9 +196,9 @@ void map_points_to_pixels(
 		--image_height;
 		--image_width;
 		float x_mul = image_width/(maxX*2);
-		float x_add = image_width/2;
+		float x_add = image_width/2.0f;
 		float y_mul = - image_height/(maxY-minY);
-		float y_add = image_height*2 - (maxY-minY)/maxY * image_height; // The 0 coordinate (remember we want to switch the y coordiante upside down
+		float y_add = image_height - image_height/(maxY-minY) * -minY; // The 0 coordinate (remember we want to switch the y coordiante upside down
 		
 		for(int i = 0; i < no_of_points; ++i){
 				pointsX[i] = pointsX[i] * x_mul + x_add;
@@ -249,7 +239,7 @@ void draw_line(
 						float moveY = (pointY1-pointY2)/differenceX;
 				
 						for(int i = startX; i < endX; ++i, y_position+=moveY){
-								m_image(i, round(y_position)) = 0;
+								m_image(round(y_position), i) = 0;
 						}
 				}
 				else
@@ -260,7 +250,7 @@ void draw_line(
 						float moveY = (pointY2-pointY1)/differenceX;
 					
 						for(int i = startX; i < endX; ++i, y_position+=moveY){
-								m_image(i, round(y_position)) = 0;
+								m_image(round(y_position), i) = 0;
 						}
 				}
 		}
@@ -273,7 +263,7 @@ void draw_line(
 						float moveX = (pointX1-pointX2)/differenceY;
 
 						for(int i = startY; i < endY; ++i, x_position+=moveX){
-								m_image(round(x_position), i) = 0;
+								m_image(i, round(x_position)) = 0;
 						}
 				}
 				else
@@ -284,9 +274,8 @@ void draw_line(
 						float moveX = (pointX2-pointX1)/differenceY;
 
 						for(int i = startY; i < endY; ++i, x_position+=moveX){
-								m_image(round(x_position), i) = 0;
+								m_image(i, round(x_position)) = 0;
 						}
 				}
-
 		}
 }
