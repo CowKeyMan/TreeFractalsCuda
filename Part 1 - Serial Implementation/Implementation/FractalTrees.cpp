@@ -4,11 +4,13 @@
 #include <cmath>
 #include <map>
 #include <climits>
+#include <assert.h>
 
 using std::cout;
 using std::cerr;
 using std::endl;
 using std::string;
+using std::to_string;
 
 using jbutil::matrix;
 using jbutil::image;
@@ -57,26 +59,25 @@ void draw_line(
 //    iterations (number of iterations) Must be between 1 and 26 (both included) otherwise it uses too much memory, as memory usage is 10x2^iterations bytes
 int main(int argc, char *argv[]){
 
-		if (argc != 7)
+		if (argc != 6)
 		{
 				cout << "Error: wrong number of parameters\n"
-						<< "Usage:\n\t<output image width>\n\t<output image height>\n\t<output image name>.pgm\n\t" 
+						<< "Usage:\n\t<output image width>\n\t<output image height>\n\t" 
 						<< "<length multiplier per iteration>\n\t<rotation per iteration (in degrees) - between 0 and 180>\n\t<number of iterations - between 1 and 26>" << endl;
 				exit(1);
 		}
 
 		int image_width = atoi(argv[1]), image_height = atoi(argv[2]);
-		string outfile = argv[3];
-		float length_multiplier = atof(argv[4]);
-		float rotation_angle_degrees = atof(argv[5]);
-		int iterations = atoi(argv[6]);
+		float length_multiplier = atof(argv[3]);
+		float rotation_angle_degrees = atof(argv[4]);
+		int iterations = atoi(argv[5]);
 
-		if (1 > rotation_angle_degrees || rotation_angle_degrees > 180){
-				failwith("Please enter a number of angle degrees between 1 and 180");
+		if (0 > rotation_angle_degrees || rotation_angle_degrees > 180){
+				failwith("Please enter a number of angle degrees between 0 and 180 (both included)");
 		}
 
-		if(1 > iterations || iterations > 26){
-				failwith("Please enter a number of iterations between 1 and 26, otherwise a memory overflow will occur");
+		if(0 > iterations || iterations > 26){
+				failwith("Please enter a number of iterations between 1 and 26(both included)"); // otherwise a memory overflow occurs
 		}
 		//For testing
 		/* 
@@ -89,7 +90,7 @@ int main(int argc, char *argv[]){
 
 		float initial_length = 1; 
 		// get the number of points we will have by the end
-		unsigned long long no_of_points = (1 << iterations); // 2^iterations
+		unsigned long long no_of_points = (2 << (iterations-1)); // 2^iterations
 
 		// lists of the properties belonging to each point
 		short* angles = (short*)malloc(no_of_points * sizeof(short));
@@ -143,15 +144,23 @@ int main(int argc, char *argv[]){
 		);
 
 		t = jbutil::gettime() - t;
+		std::cerr << "Time taken to generate the points: " << t << "s" << endl;
+
+		t = jbutil::gettime();
 
 		image<int> image_out = image<int>(image_height, image_width, 1, 255);
 		image_out.set_channel(0, m_image);
 
+		t = jbutil::gettime() - t;
+		std::cerr << "Time taken to create the image: " << t << "s" << endl;
+
 		// save image
+		string outfile = to_string(image_width) + "x" + to_string(image_height) +
+				"_m=" + to_string(length_multiplier) + "_theta=" +
+				to_string(rotation_angle_degrees) + "_n=" + to_string(iterations) + ".pgm";
 		std::ofstream file_out(outfile.c_str());
 		image_out.save(file_out);
 
-		std::cerr << "Time taken: " << t << "s" << endl;
 }
 
 float degrees_to_radians(int degrees){
@@ -159,12 +168,14 @@ float degrees_to_radians(int degrees){
 }
 
 void populate_sin_map(float* sin_map){
+		assert(sin_map != NULL);
 		for(int i = -180; i < 179; i++){
 				sin_map[i+180] = sin(degrees_to_radians(i));
 		}
 }
 
 void populate_cos_map(float* cos_map){
+		assert(cos_map != NULL);
 		for(int i = -180; i < 179; i++){
 				cos_map[i+180] = cos(degrees_to_radians(i));
 		}
@@ -182,6 +193,8 @@ void calculcate_points(
 		float &maxX, float &minY, float &maxY
 )
 {
+		assert(pointsX != NULL && pointsY != NULL && angles != NULL && sin_map != NULL && cos_map != NULL);
+
 		// i and i+1 are the indices of the current point being edited
 		// j is the index of the line/point on which they both depend
 		// /p2_Test is used so that when this is a power of 2, we decrease the length
@@ -237,16 +250,20 @@ void map_points_to_pixels(
 		const float maxX, const float minY, const float maxY
 )
 {
+		assert(pointsX != NULL && pointsY != NULL);
+
 		--image_height;
 		--image_width;
-		float x_mul = image_width/(maxX*2);
+		float x_mul = (maxX == 0)? 1: image_width/(maxX*2);
 		float x_add = image_width/2.0f;
-		float y_mul = - image_height/(maxY-minY);
-		float y_add = image_height - image_height/(maxY-minY) * -minY; // The 0 coordinate (remember we want to switch the y coordiante upside down
+		float y_mul = (maxY==minY)? image_height : -image_height/(maxY-minY);
+		float y_add = (maxY==minY)? 0 : image_height + image_height/(maxY-minY) * minY; // The 0 coordinate (remember we want to switch the y coordiante upside down
 		
 		for(int i = 0; i < no_of_points; ++i){
 				pointsX[i] = pointsX[i] * x_mul + x_add;
 				pointsY[i] = pointsY[i] * y_mul + y_add;
+
+				assert(pointsX[i] > -1 && pointsX[i] < image_width+1 && pointsY[i] > -1 && pointsY[i] < image_height+1);
 		}
 }
 
@@ -256,6 +273,8 @@ void draw_lines(
 		matrix<int> &m_image
 )
 {
+		assert(pointsX != NULL && pointsY != NULL);
+
 		draw_line(pointsX[0], pointsY[0], pointsX[1], pointsY[1], m_image);
 		for(unsigned long long i=2, i2=3, j=1; i < no_of_points; i+=2, i2+=2, ++j){
 				draw_line(pointsX[i], pointsY[i], pointsX[j], pointsY[j], m_image);
