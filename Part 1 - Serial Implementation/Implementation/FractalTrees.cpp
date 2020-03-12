@@ -25,7 +25,7 @@ void calculcate_points(
 		const float* sin_map, const float* cos_map,
 		const float line_length, const float length_multiplier,
 		const int rotation_angle_degrees,
-		const unsigned long long no_of_points,
+		const unsigned long no_of_points,
 		float &maxX, float &minY, float &maxY
 );
 
@@ -39,7 +39,7 @@ void map_points_to_pixels(
 );
 
 void draw_lines(
-		const unsigned long long no_of_points,
+		const unsigned long no_of_points,
 		float* pointsX, float* pointsY,
 		matrix<int> &m_image
 );
@@ -90,7 +90,7 @@ int main(int argc, char *argv[]){
 
 		float initial_length = 1; 
 		// get the number of points we will have by the end
-		unsigned long long no_of_points = (2 << (iterations-1)); // 2^iterations
+		unsigned long no_of_points = (2 << (iterations-1)); // 2^iterations
 
 		// lists of the properties belonging to each point
 		short* angles = (short*)malloc(no_of_points * sizeof(short));
@@ -189,7 +189,7 @@ void calculcate_points(
 		float line_length,
 		const float length_multiplier,
 		const int rotation_angle_degrees,
-		const unsigned long long no_of_points,
+		const unsigned long no_of_points,
 		float &maxX, float &minY, float &maxY
 )
 {
@@ -198,7 +198,7 @@ void calculcate_points(
 		// i and i+1 are the indices of the current point being edited
 		// j is the index of the line/point on which they both depend
 		// /p2_Test is used so that when this is a power of 2, we decrease the length
-		for(unsigned long long i=2, i2=3, j=1, p2_test=2; i < no_of_points; i+=2, i2+=2, ++j, ++p2_test){
+		for(unsigned long i=2, i2=3, j=1, p2_test=2; i < no_of_points; i+=2, i2+=2, ++j, ++p2_test){
 				// one line will rotate one way and the other will rotate the otehr direction
 				angles[i] = angles[j] + rotation_angle_degrees;
 				angles[i2] = angles[j] - rotation_angle_degrees;
@@ -268,7 +268,7 @@ void map_points_to_pixels(
 }
 
 void draw_lines(
-		const unsigned long long no_of_points,
+		const unsigned long no_of_points,
 		float* pointsX, float* pointsY,
 		matrix<int> &m_image
 )
@@ -276,7 +276,7 @@ void draw_lines(
 		assert(pointsX != NULL && pointsY != NULL);
 
 		draw_line(pointsX[0], pointsY[0], pointsX[1], pointsY[1], m_image);
-		for(unsigned long long i=2, i2=3, j=1; i < no_of_points; i+=2, i2+=2, ++j){
+		for(unsigned long i=2, i2=3, j=1; i < no_of_points; i+=2, i2+=2, ++j){
 				draw_line(pointsX[i], pointsY[i], pointsX[j], pointsY[j], m_image);
 				draw_line(pointsX[i2], pointsY[i2], pointsX[j], pointsY[j], m_image);
 		}
