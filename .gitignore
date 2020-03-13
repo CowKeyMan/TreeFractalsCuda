@@ -36,3 +36,5 @@
 e
 
 *.pgm
+
+.ipynb_checkpoints/

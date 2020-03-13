@@ -63,7 +63,8 @@ int main(int argc, char *argv[]){
 		{
 				cout << "Error: wrong number of parameters\n"
 						<< "Usage:\n\t<output image width>\n\t<output image height>\n\t" 
-						<< "<length multiplier per iteration>\n\t<rotation per iteration (in degrees) - between 0 and 180>\n\t<number of iterations - between 1 and 26>" << endl;
+						<< "<length multiplier per iteration>\n\t<rotation per iteration (in degrees) - between 0 and 180>\n\t"
+						<< "<number of iterations - between 1 and 26>" << endl;
 				exit(1);
 		}
 
@@ -103,14 +104,20 @@ int main(int argc, char *argv[]){
 		pointsY[0] = 0;
 		pointsY[1] = initial_length;
 
-		double t = jbutil::gettime();
 
 		float sin_map[360]; // maps angle i to its sin at index i+180 (-180 <= i <= 180)
 		float cos_map[360]; // maps angle i to its cos at index i+180 (-180 <= i <= 180)
-		populate_sin_map(sin_map);
-		populate_cos_map(cos_map);
 
 		float maxX, minY, maxY;
+
+		matrix<int> m_image;
+		m_image.resize(image_height, image_width);
+
+		// --------- START TIMING PART 1 ----------
+		double t = jbutil::gettime() 
+
+		populate_sin_map(sin_map);
+		populate_cos_map(cos_map);
 
 		calculcate_points(
 				pointsX, pointsY,
@@ -132,10 +139,14 @@ int main(int argc, char *argv[]){
 				maxX, minY, maxY
 		);
 
-		// Inititalise matrix and make it all white
-		matrix<int> m_image;
-		m_image.resize(image_height, image_width);
-		matrix_fill_default(m_image, 255);
+		// --------- STOP TIMING PART 1 ----------
+		t = jbutil::gettime() - t;
+		std::cerr << "Time taken to generate the points: " << t << "s" << endl;
+
+		// --------- START TIMING PART 2 ----------
+		t = jbutil::gettime();
+		
+		matrix_fill_default(m_image, 255); // Initialise to all white
 
 		draw_lines(
 				no_of_points,
@@ -143,16 +154,12 @@ int main(int argc, char *argv[]){
 				m_image
 		);
 
+		// --------- STOP TIMING PART 2 ----------
 		t = jbutil::gettime() - t;
-		std::cerr << "Time taken to generate the points: " << t << "s" << endl;
-
-		t = jbutil::gettime();
+		std::cerr << "Time taken to create the image: " << t << "s" << endl;
 
 		image<int> image_out = image<int>(image_height, image_width, 1, 255);
 		image_out.set_channel(0, m_image);
-
-		t = jbutil::gettime() - t;
-		std::cerr << "Time taken to create the image: " << t << "s" << endl;
 
 		// save image
 		string outfile = to_string(image_width) + "x" + to_string(image_height) +

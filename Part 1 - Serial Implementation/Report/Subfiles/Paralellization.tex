@@ -8,7 +8,7 @@ While this problem is not fully parallelizable, different parts of the pipeline 
 	\item The last part of the pipeline is the image synthesis. Here, each thread may compute a line. It will not matter if both threads write the the same pixel at a time, because the operation is changing a pixel from white to black, hence if one overwrites the other in a random order, the result is still the same. The complexity of this operation is not so straight forward as it depends on the image size, hence this will be determined graphically in section \ref{results}.
 \end{enumerate}
 
-Another part which may be parallellized in the case of this implementation is the initialisation of the image matrix, to make it all white at the start.
+Another part which may be parallellized in the case of this implementation is the initialisation of the image matrix, to make it all white at the start. This can be done asynchronously to the first three steps.
 
 An important thing to note is that before a step in the pipeline starts, the last step of the pipeline must finish.
 
