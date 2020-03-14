@@ -38,3 +38,17 @@ e
 *.pgm
 
 .ipynb_checkpoints/
+
+*.aux
+*.log
+*.pdf
+*.synctex.gz
+*.toc
+*.bbl
+*.blg
+*.out
+
+*.mk
+
+Debug/
+Release/

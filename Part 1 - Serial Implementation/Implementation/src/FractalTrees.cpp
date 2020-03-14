@@ -10,7 +10,6 @@ using std::cout;
 using std::cerr;
 using std::endl;
 using std::string;
-using std::to_string;
 
 using jbutil::matrix;
 using jbutil::image;
@@ -53,16 +52,15 @@ void draw_line(
 // Inputs:
 //    int image_width - in pixels
 //    int image_height - in pixels
-//    string outfile - pgm image output name
 //    float length_multiplier (multiply the current line's length by this number
-//				int rotation_angle_degrees (The amount to rotate per iteration) must be between 0 and 180
+//	  int rotation_angle_degrees (The amount to rotate per iteration) must be between 0 and 180
 //    iterations (number of iterations) Must be between 1 and 26 (both included) otherwise it uses too much memory, as memory usage is 10x2^iterations bytes
 int main(int argc, char *argv[]){
 
 		if (argc != 6)
 		{
 				cout << "Error: wrong number of parameters\n"
-						<< "Usage:\n\t<output image width>\n\t<output image height>\n\t" 
+						<< "Usage:\n\t<output image width>\n\t<output image height>\n\t"
 						<< "<length multiplier per iteration>\n\t<rotation per iteration (in degrees) - between 0 and 180>\n\t"
 						<< "<number of iterations - between 1 and 26>" << endl;
 				exit(1);
@@ -81,15 +79,14 @@ int main(int argc, char *argv[]){
 				failwith("Please enter a number of iterations between 1 and 26(both included)"); // otherwise a memory overflow occurs
 		}
 		//For testing
-		/* 
+		/*
 		int image_width = 512, image_height=512;
-		string outfile = "out.pgm";
 		float length_multiplier = 1;
 		int rotation_angle_degrees = 20;
 		int iterations = 12;
 		*/
 
-		float initial_length = 1; 
+		float initial_length = 1;
 		// get the number of points we will have by the end
 		unsigned long no_of_points = (2 << (iterations-1)); // 2^iterations
 
@@ -114,7 +111,7 @@ int main(int argc, char *argv[]){
 		m_image.resize(image_height, image_width);
 
 		// --------- START TIMING PART 1 ----------
-		double t = jbutil::gettime() 
+		double t = jbutil::gettime();
 
 		populate_sin_map(sin_map);
 		populate_cos_map(cos_map);
@@ -145,7 +142,7 @@ int main(int argc, char *argv[]){
 
 		// --------- START TIMING PART 2 ----------
 		t = jbutil::gettime();
-		
+
 		matrix_fill_default(m_image, 255); // Initialise to all white
 
 		draw_lines(
@@ -162,10 +159,13 @@ int main(int argc, char *argv[]){
 		image_out.set_channel(0, m_image);
 
 		// save image
-		string outfile = to_string(image_width) + "x" + to_string(image_height) +
-				"_m=" + to_string(length_multiplier) + "_theta=" +
-				to_string(rotation_angle_degrees) + "_n=" + to_string(iterations) + ".pgm";
-		std::ofstream file_out(outfile.c_str());
+		char outfile[150];
+		sprintf(outfile, "output_images/%d x%d _m=%.2f _theta=%d _n= %.0f.pgm",
+				image_width, image_height,
+				length_multiplier,
+				rotation_angle_degrees,
+				iterations);
+		std::ofstream file_out(outfile);
 		image_out.save(file_out);
 
 }
@@ -265,7 +265,7 @@ void map_points_to_pixels(
 		float x_add = image_width/2.0f;
 		float y_mul = (maxY==minY)? image_height : -image_height/(maxY-minY);
 		float y_add = (maxY==minY)? 0 : image_height + image_height/(maxY-minY) * minY; // The 0 coordinate (remember we want to switch the y coordiante upside down
-		
+
 		for(int i = 0; i < no_of_points; ++i){
 				pointsX[i] = pointsX[i] * x_mul + x_add;
 				pointsY[i] = pointsY[i] * y_mul + y_add;
@@ -307,7 +307,7 @@ void draw_line(
 						int startX = round(pointX2);
 						int endX = round(pointX1);
 						float moveY = (pointY1-pointY2)/differenceX;
-				
+
 						for(int i = startX; i < endX; ++i, y_position+=moveY){
 								m_image(round(y_position), i) = 0;
 						}
@@ -318,7 +318,7 @@ void draw_line(
 						int startX = round(pointX1);
 						int endX = round(pointX2);
 						float moveY = (pointY2-pointY1)/differenceX;
-					
+
 						for(int i = startX; i < endX; ++i, y_position+=moveY){
 								m_image(round(y_position), i) = 0;
 						}
