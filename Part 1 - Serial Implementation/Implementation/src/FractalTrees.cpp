@@ -100,7 +100,7 @@ int main(int argc, char *argv[]){
 		float* pointsY = (float*)malloc(no_of_points * sizeof(float));
 		pointsY[0] = 0;
 		pointsY[1] = initial_length;
-
+		
 
 		float sin_map[360]; // maps angle i to its sin at index i+180 (-180 <= i <= 180)
 		float cos_map[360]; // maps angle i to its cos at index i+180 (-180 <= i <= 180)
@@ -120,7 +120,7 @@ int main(int argc, char *argv[]){
 				pointsX, pointsY,
 				angles,
 				sin_map, cos_map,
-				initial_length,
+				initial_length/2,
 				length_multiplier,
 				rotation_angle_degrees,
 				no_of_points,
