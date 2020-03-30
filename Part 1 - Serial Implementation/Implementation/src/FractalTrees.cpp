@@ -68,7 +68,7 @@ int main(int argc, char *argv[]){
 
 		int image_width = atoi(argv[1]), image_height = atoi(argv[2]);
 		float length_multiplier = atof(argv[3]);
-		float rotation_angle_degrees = atof(argv[4]);
+		int rotation_angle_degrees = atoi(argv[4]);
 		int iterations = atoi(argv[5]);
 
 		if (0 > rotation_angle_degrees || rotation_angle_degrees > 180){
@@ -160,14 +160,13 @@ int main(int argc, char *argv[]){
 
 		// save image
 		char outfile[150];
-		sprintf(outfile, "output_images/%d x%d _m=%.2f _theta=%d _n= %.0f.pgm",
+		sprintf(outfile, "output_images/%d x%d _m=%.2f _theta=%d _n= %.0d.pgm",
 				image_width, image_height,
 				length_multiplier,
 				rotation_angle_degrees,
 				iterations);
 		std::ofstream file_out(outfile);
 		image_out.save(file_out);
-
 }
 
 float degrees_to_radians(int degrees){
