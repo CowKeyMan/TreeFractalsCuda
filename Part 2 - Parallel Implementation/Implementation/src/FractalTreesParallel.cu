@@ -150,15 +150,13 @@ int main(int argc, char *argv[]){
 		// TODO: Second vriable is either 362, or 512 
 		calculate_points<<<1, 512>>>(angles, pointsX, pointsY, iterations-1, line_length/2, length_multiplier, rotation_angle_degrees);
 
-		//cudaDeviceSynchronize();
-
 		cudaFree(angles);
 
 		calculateMin<<<1, 512>>>(pointsX, minMaxWorkingList, &minMax_X_Y[0], iterations, no_of_points/2);
 		calculateMin<<<1, 512>>>(pointsY, minMaxWorkingList, &minMax_X_Y[1], iterations, no_of_points/2);
 		calculateMax<<<1, 512>>>(pointsY, minMaxWorkingList, &minMax_X_Y[2], iterations, no_of_points/2);
 		
-
+		
 
 
 
