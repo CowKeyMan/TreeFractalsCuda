@@ -30,7 +30,7 @@ __global__ void calculate_points(
 		const int rotation_angle_degrees
 )
 {
-		// initialize the cos and sin maps (Note, blockdim must be greater than 360) 
+		// initialize the cos and sin maps (Note, blockdim must be 512
 		__shared__ float sin_map[512];
 		__shared__ float cos_map[512];
 		float rad = threadIdx.x * 0.01745329251f; // small number is pi/180
@@ -39,19 +39,20 @@ __global__ void calculate_points(
 
 		// initialize the angles and points list
 		const unsigned int index = blockIdx.x * blockDim.x + threadIdx.x;
-		for(int i = 0; i < 4; ++i){
+		printf("%d\n",index);
+		for(int i = 0; i < iterations; ++i){
 				if( index < (1 << i) ){ // first we compute first 2, then next 4, then next 8, etc
 						unsigned int array_index = index*2 + (2<<i); // first 2 already initialized
 						unsigned int array_index_plus_1 = array_index + 1; // first 2 already initialized
 						unsigned int array_index_div_2 = array_index >> 1;
 
-						angles[array_index] = ( (angles[array_index_div_2] - rotation_angle_degrees) + 360 ) % 360;
-						angles[array_index_plus_1] = ( (angles[array_index_div_2] + rotation_angle_degrees) + 360 ) % 360;
+						angles[array_index] = ( (angles[array_index_div_2] + rotation_angle_degrees) ) % 360;
+						angles[array_index_plus_1] = ( (angles[array_index_div_2 % 360] - rotation_angle_degrees) + 360 ) % 360;
 
-						pointsX[array_index] = pointsX[array_index_div_2] + line_length * sin_map[ angles[array_index]+180 ];
-						pointsY[array_index] = pointsY[array_index_div_2] + line_length * cos_map[ angles[array_index]+180 ];
-						pointsX[array_index_plus_1] = pointsX[array_index_div_2] + line_length * sin_map[ angles[array_index_plus_1]+180 ];
-						pointsY[array_index_plus_1] = pointsY[array_index_div_2] + line_length * cos_map[ angles[array_index_plus_1]+180 ];
+						pointsX[array_index] = pointsX[array_index_div_2] + line_length * sin_map[ (angles[array_index]) ];
+					 pointsY[array_index] = pointsY[array_index_div_2] + line_length * cos_map[ (angles[array_index]) ];
+						pointsX[array_index_plus_1] = pointsX[array_index_div_2] + line_length * sin_map[ (angles[array_index_plus_1]) ];
+						pointsY[array_index_plus_1] = pointsY[array_index_div_2] + line_length * cos_map[ (angles[array_index_plus_1]) ];
 				}
 				__syncthreads();
 				line_length *= length_multiplier;
@@ -62,7 +63,6 @@ __global__ void calculate_points(
 __global__ void calculateMin(float *points, float *storeList, float *retValue, const int iterations, unsigned long no_of_threads){
 		const unsigned int index = blockIdx.x * blockDim.x + threadIdx.x;
 		if(index < no_of_threads){
-				//printf("Thread %d items = %d, %d   %f, %f   %d\n", threadIdx.x, (index*2) , (index*2 + 1), points[index*2] , points[index*2 + 1], (points[index*2] > points[index*2 + 1]));
 			 storeList[index] = points[ index*2 + (points[index*2] > points[index*2 + 1]) ];
 		}
 		
@@ -71,7 +71,6 @@ __global__ void calculateMin(float *points, float *storeList, float *retValue, c
 
 		for(int i = 1; i < iterations; ++i){ // start i from 1 as the first iteration has already been done
 				if(index < no_of_threads){
-						//printf("Thread %d items = %d, %d   %f, %f   %d\n", threadIdx.x, (index*2) , (index*2 + 1), storeList[index*2] , storeList[index*2 + 1], (storeList[index*2] > storeList[index*2 + 1]));
 						storeList[index] = storeList[ index*2 + (storeList[index*2] > storeList[index*2 + 1]) ];
 				}
 				no_of_threads/=2;
@@ -84,7 +83,6 @@ __global__ void calculateMin(float *points, float *storeList, float *retValue, c
 __global__ void calculateMax(float *points, float *storeList, float *retValue, const int iterations, unsigned long no_of_threads){
 		const unsigned int index = blockIdx.x * blockDim.x + threadIdx.x;
 		if(index < no_of_threads){
-				//printf("Thread %d items = %d, %d   %f, %f   %d\n", threadIdx.x, (index*2) , (index*2 + 1), points[index*2] , points[index*2 + 1], (points[index*2] < points[index*2 + 1]));
 			 storeList[index] = points[ index*2 + (points[index*2] < points[index*2 + 1]) ];
 		}
 		
@@ -93,7 +91,6 @@ __global__ void calculateMax(float *points, float *storeList, float *retValue, c
 
 		for(int i = 1; i < iterations; ++i){ // start i from 1 as the first iteration has already been done
 				if(index < no_of_threads){
-						//printf("Thread %d items = %d, %d   %f, %f   %d\n", threadIdx.x, (index*2) , (index*2 + 1), storeList[index*2] , storeList[index*2 + 1], (storeList[index*2] < storeList[index*2 + 1]));
 						storeList[index] = storeList[ index*2 + (storeList[index*2] < storeList[index*2 + 1]) ];
 				}
 				no_of_threads/=2;
@@ -146,11 +143,26 @@ int main(int argc, char *argv[]){
 
 		//populate_sin_cos_maps<<<1, map_size>>>(sin_map, cos_map);
 
-		// TODO: change 1 to ceil((no_of_points >> 1) /512)
-		// TODO: Second vriable is either 362, or 512 
+		unsigned int blocks = no_of_points/512 + (no_of_points % 512 != 0);
+		cout << no_of_points << " " << blocks<<endl<<endl;
 		calculate_points<<<1, 512>>>(angles, pointsX, pointsY, iterations-1, line_length/2, length_multiplier, rotation_angle_degrees);
 
-		cudaFree(angles);
+		// make the host block until the device is finished with foo
+  cudaDeviceSynchronize();
+
+		 // check for error
+  cudaError_t error = cudaGetLastError();
+  if(error != cudaSuccess)
+  {
+    // print the CUDA error message and exit
+    printf("CUDA error: %s\n", cudaGetErrorString(error));
+    exit(-1);
+  }else{
+				cout << "ok for now" << endl;
+		}
+
+		
+		//cudaFree(angles);
 
 		calculateMin<<<1, 512>>>(pointsX, minMaxWorkingList, &minMax_X_Y[0], iterations, no_of_points/2);
 		calculateMin<<<1, 512>>>(pointsY, minMaxWorkingList, &minMax_X_Y[1], iterations, no_of_points/2);
@@ -171,16 +183,15 @@ int main(int argc, char *argv[]){
 		cudaMemcpy(px, pointsX, float_list_size, cudaMemcpyDeviceToHost);
 		cudaMemcpy(py, pointsY, float_list_size, cudaMemcpyDeviceToHost);
 
-
-
-		float *t = (float*)malloc(float_list_size/2);
-		cudaMemcpy(t, minMaxWorkingList, float_list_size/2, cudaMemcpyDeviceToHost);
-
 		for(int i = 0; i < no_of_points; ++i){
 				cout << i << " " << a[i] << " " << px[i] << " " << py[i] << endl;
 		}
 
+
 		cout << endl << endl;
+
+		float *t = (float*)malloc(float_list_size/2);
+		cudaMemcpy(t, minMaxWorkingList, float_list_size/2, cudaMemcpyDeviceToHost);
 
 		for(int i = 0; i < no_of_points/2; ++i){
 				cout << t[i] << endl;
