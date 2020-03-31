@@ -14,7 +14,6 @@ using std::string;
 //using jbutil::matrix;
 //using jbutil::image;
 
-//__global__ void populate_sin_cos_maps(*sin_map, *cos_map);
 __global__ void populate_sin_cos_maps(float *sin_map, float *cos_map){
 		float rad = threadIdx.x * 0.01745329251f; // small number is pi/180
 	 sincosf(rad, &sin_map[threadIdx.x], &cos_map[threadIdx.x]);
@@ -27,19 +26,13 @@ __global__ void calculate_points(
 		const int iterations,
 		float line_length,
 		const float length_multiplier,
-		const int rotation_angle_degrees
+		const int rotation_angle_degrees,
+		float *sin_map,
+		float *cos_map
 )
 {
-		// initialize the cos and sin maps (Note, blockdim must be 512
-		__shared__ float sin_map[512];
-		__shared__ float cos_map[512];
-		float rad = threadIdx.x * 0.01745329251f; // small number is pi/180
-		sincosf(rad, &sin_map[threadIdx.x], &cos_map[threadIdx.x]);
-		__syncthreads();
-
 		// initialize the angles and points list
 		const unsigned int index = blockIdx.x * blockDim.x + threadIdx.x;
-		printf("%d\n",index);
 		for(int i = 0; i < iterations; ++i){
 				if( index < (1 << i) ){ // first we compute first 2, then next 4, then next 8, etc
 						unsigned int array_index = index*2 + (2<<i); // first 2 already initialized
@@ -100,8 +93,15 @@ __global__ void calculateMax(float *points, float *storeList, float *retValue, c
 		*retValue = storeList[0];
 }
 
+__global__ void map_points_to_pixels(float *pointsX, float *pointsY, const float x_mul, const float x_add, const float y_mul, const float y_add){
+		const unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+		pointsX[i] = pointsX[i] * x_mul + x_add;
+		pointsY[i] = pointsY[i] * y_mul + y_add;
+}
+
 
 int main(int argc, char *argv[]){
+		int image_width=1024, image_height=1024;
 		float length_multiplier = 0.5; // (multiply the current line's length by this number
 		int rotation_angle_degrees = 90; // (The amount to rotate per iteration) must be between 0 and 180
 		int iterations = 5; // (number of iterations) Must be between 1 and 26 (both included) otherwise it uses too much memory, as memory usage is 10x2^iterations bytes
@@ -111,12 +111,13 @@ int main(int argc, char *argv[]){
 		const unsigned long no_of_points = (1 << (iterations));
 
 		// Declare sin and cosine maps
-		/*float *sin_map, *cos_map;
+		float *sin_map, *cos_map;
 		const int map_size = (360 + 360%32);
 		const int map_physical_size = map_size * sizeof(float);
 		cudaMalloc((void**) &sin_map, map_physical_size);
 		cudaMalloc((void**) &cos_map, map_physical_size);
-		*/
+		populate_sin_cos_maps<<<1, map_size>>>(sin_map, cos_map);
+
 		// Declare angles and pointsX and pointsY lists
 		short *angles;
 		float *pointsX, *pointsY;
@@ -145,7 +146,7 @@ int main(int argc, char *argv[]){
 
 		unsigned int blocks = no_of_points/512 + (no_of_points % 512 != 0);
 		cout << no_of_points << " " << blocks<<endl<<endl;
-		calculate_points<<<1, 512>>>(angles, pointsX, pointsY, iterations-1, line_length/2, length_multiplier, rotation_angle_degrees);
+		calculate_points<<<1, 512>>>(angles, pointsX, pointsY, iterations-1, line_length/2, length_multiplier, rotation_angle_degrees, sin_map, cos_map);
 
 		// make the host block until the device is finished with foo
   cudaDeviceSynchronize();
@@ -164,11 +165,18 @@ int main(int argc, char *argv[]){
 		
 		//cudaFree(angles);
 
-		calculateMin<<<1, 512>>>(pointsX, minMaxWorkingList, &minMax_X_Y[0], iterations, no_of_points/2);
+		calculateMax<<<1, 512>>>(pointsX, minMaxWorkingList, &minMax_X_Y[0], iterations, no_of_points/2);
 		calculateMin<<<1, 512>>>(pointsY, minMaxWorkingList, &minMax_X_Y[1], iterations, no_of_points/2);
 		calculateMax<<<1, 512>>>(pointsY, minMaxWorkingList, &minMax_X_Y[2], iterations, no_of_points/2);
 		
-		
+		float maxX_minY_maxY[3];
+		cudaMemcpy(maxX_minY_maxY, minMax_X_Y, sizeof(float) * 3, cudaMemcpyDeviceToHost);
+		float x_mul = (maxX_minY_maxY[0] == 0)? 1: image_width/(maxX_minY_maxY[0]*2);
+		float x_add = image_width/2.0f;
+		float y_mul = (maxX_minY_maxY[2]==maxX_minY_maxY[1])? image_height : -image_height/(maxX_minY_maxY[2] - maxX_minY_maxY[1]);
+		float y_add = (maxX_minY_maxY[2]==maxX_minY_maxY[1])? 0 : image_height + image_height/(maxX_minY_maxY[2]-maxX_minY_maxY[1]) * maxX_minY_maxY[1];
+
+		map_points_to_pixels<<<blocks, ((no_of_points<512)? no_of_points : 512)>>>(pointsX, pointsY, x_mul, x_add, y_mul, y_add);
 
 
 
