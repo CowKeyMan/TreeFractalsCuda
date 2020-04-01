@@ -101,6 +101,16 @@ __global__ void calculateMin(float *points, float *storeList, float *retValue, c
 		*retValue = storeList[0];
 }
 
+__global__ void calculateMin_single_iteration(float *points, float *storeList){
+		const unsigned int index = blockIdx.x * blockDim.x + threadIdx.x;
+		storeList[index] = points[ index*2 + (points[index*2] > points[index*2 + 1]) ];
+}
+
+__global__ void calculateMax_single_iteration(float *points, float *storeList){
+		const unsigned int index = blockIdx.x * blockDim.x + threadIdx.x;
+		storeList[index] = points[ index*2 + (points[index*2] < points[index*2 + 1]) ];
+}
+
 __global__ void calculateMax(float *points, float *storeList, float *retValue, const int iterations, unsigned long no_of_threads){
 		const unsigned int index = blockIdx.x * blockDim.x + threadIdx.x;
 		if(index < no_of_threads){
@@ -130,9 +140,9 @@ __global__ void map_points_to_pixels(float *pointsX, float *pointsY, const float
 
 int main(int argc, char *argv[]){
 		int image_width=1024, image_height=1024;
-		float length_multiplier = 0.9; // (multiply the current line's length by this number
-		int rotation_angle_degrees = 1; // (The amount to rotate per iteration) must be between 0 and 180
-		int iterations = 12; // (number of iterations) Must be between 1 and 26 (both included) otherwise it uses too much memory, as memory usage is 10x2^iterations bytes
+		float length_multiplier = 1; // (multiply the current line's length by this number
+		int rotation_angle_degrees = 90; // (The amount to rotate per iteration) must be between 0 and 180
+		int iterations = 15; // (number of iterations) Must be between 1 and 26 (both included) otherwise it uses too much memory, as memory usage is 10x2^iterations bytes
 
 		const unsigned long no_of_points = (1 << (iterations));
 
@@ -178,12 +188,59 @@ int main(int argc, char *argv[]){
 		unsigned int blocks = no_of_points/512 + (no_of_points % 512 != 0);
 
 		calculate_points<<<1, 512>>>(angles, pointsX, pointsY, ((iterations-1 < 10)? iterations-1 : 10), length_multiplier, rotation_angle_degrees, sin_map, cos_map);
-		unsigned long start_index = 2048;
-		for(int i = 0; i < iterations - 11; ++i){
-				calculate_points_single_iteration<<<(i+1)*2, 512>>>(angles, pointsX, pointsY, line_length, length_multiplier, rotation_angle_degrees, sin_map, cos_map, start_index);
-				start_index *= 2;
+		for(int i = 2048; i < no_of_points; i *= 2){
+				calculate_points_single_iteration<<<i/1024, 512>>>(angles, pointsX, pointsY, line_length, length_multiplier, rotation_angle_degrees, sin_map, cos_map, i);
 		}
-/*
+
+		
+		//cudaFree(angles);
+
+		bool firstTime = true;
+		for(int i = no_of_points; i > 1024; i /= 2){
+				if(firstTime){
+						calculateMax_single_iteration<<<i/512, 512>>>(pointsX, minMaxWorkingList);
+						firstTime = false;
+				}else{
+						calculateMax_single_iteration<<<i/512, 512>>>(minMaxWorkingList, minMaxWorkingList);
+				}
+		}
+		if(firstTime){
+				calculateMax<<<1, 512>>>(pointsX, minMaxWorkingList, &minMax_X_Y[0], iterations, no_of_points/2);
+		}else{
+				calculateMax<<<1, 512>>>(minMaxWorkingList, minMaxWorkingList, &minMax_X_Y[0], iterations, no_of_points/2);
+		}
+
+	 firstTime = true;
+		for(int i = no_of_points; i > 1024; i /= 2){
+				if(firstTime){
+						calculateMin_single_iteration<<<i/512, 512>>>(pointsY, minMaxWorkingList);
+						firstTime = false;
+				}else{
+						calculateMin_single_iteration<<<i/512, 512>>>(minMaxWorkingList, minMaxWorkingList);
+				}
+		}
+		if(firstTime){
+				calculateMin<<<1, 512>>>(pointsY, minMaxWorkingList, &minMax_X_Y[1], iterations, no_of_points/2);
+		}else{
+				calculateMin<<<1, 512>>>(minMaxWorkingList, minMaxWorkingList, &minMax_X_Y[1], iterations, no_of_points/2);
+		}	
+
+		firstTime = true;
+		for(int i = no_of_points; i > 1024; i /= 2){
+				if(firstTime){
+						calculateMax_single_iteration<<<i/512, 512>>>(pointsY, minMaxWorkingList);
+						firstTime = false;
+				}else{
+						calculateMax_single_iteration<<<i/512, 512>>>(minMaxWorkingList, minMaxWorkingList);
+				}
+		}
+		if(firstTime){
+				calculateMax<<<1, 512>>>(pointsY, minMaxWorkingList, &minMax_X_Y[2], iterations, no_of_points/2);
+		}else{
+				calculateMax<<<1, 512>>>(minMaxWorkingList, minMaxWorkingList, &minMax_X_Y[2], iterations, no_of_points/2);
+		}
+
+
 		// make the host block until the device is finished with foo
   cudaDeviceSynchronize();
 		 // check for error
@@ -197,24 +254,20 @@ int main(int argc, char *argv[]){
 				cout << "ok for now" << endl;
 		}
 
-		
-		//cudaFree(angles);
 
-		calculateMax<<<1, 512>>>(pointsX, minMaxWorkingList, &minMax_X_Y[0], iterations, no_of_points/2);
-		calculateMin<<<1, 512>>>(pointsY, minMaxWorkingList, &minMax_X_Y[1], iterations, no_of_points/2);
-		calculateMax<<<1, 512>>>(pointsY, minMaxWorkingList, &minMax_X_Y[2], iterations, no_of_points/2);
-		
-		float maxX_minY_maxY[3];
+
+
+		/*float maxX_minY_maxY[3];
 		cudaMemcpy(maxX_minY_maxY, minMax_X_Y, sizeof(float) * 3, cudaMemcpyDeviceToHost);
 		float x_mul = (maxX_minY_maxY[0] == 0)? 1: image_width/(maxX_minY_maxY[0]*2);
 		float x_add = image_width/2.0f;
 		float y_mul = (maxX_minY_maxY[2]==maxX_minY_maxY[1])? image_height : -image_height/(maxX_minY_maxY[2] - maxX_minY_maxY[1]);
 		float y_add = (maxX_minY_maxY[2]==maxX_minY_maxY[1])? 0 : image_height + image_height/(maxX_minY_maxY[2]-maxX_minY_maxY[1]) * maxX_minY_maxY[1];
 
-		map_points_to_pixels<<<blocks, ((no_of_points<512)? no_of_points : 512)>>>(pointsX, pointsY, x_mul, x_add, y_mul, y_add);
+		map_points_to_pixels<<<blocks, ((no_of_points<512)? no_of_points : 512)>>>(pointsX, pointsY, x_mul, x_add, y_mul, y_add);*/
 
 		// --------- STOP TIMING PART 1 ----------
-*/
+
 
 
 
@@ -227,18 +280,18 @@ int main(int argc, char *argv[]){
 		cudaMemcpy(px, pointsX, float_list_size, cudaMemcpyDeviceToHost);
 		cudaMemcpy(py, pointsY, float_list_size, cudaMemcpyDeviceToHost);
 
-		for(unsigned long i = 0; i < no_of_points; ++i){
+		for(unsigned long i = no_of_points-100; i < no_of_points; ++i){
 				cout << i << " " << a[i] << " " << px[i] << " " << py[i] << endl;
 		}
 
-/*
+
 		cout << endl << endl;
 
 		float *t = (float*)malloc(float_list_size/2);
 		cudaMemcpy(t, minMaxWorkingList, float_list_size/2, cudaMemcpyDeviceToHost);
 
 		for(int i = 0; i < no_of_points/2; ++i){
-				cout << t[i] << endl;
+				//cout << t[i] << endl;
 		}
 
 		float *minMax_X_Y_local = (float*)malloc(sizeof(float)*3);
@@ -247,5 +300,5 @@ int main(int argc, char *argv[]){
 		cout << endl << endl;
 		for(int i = 0; i < 3; ++i){
 				cout << minMax_X_Y_local[i] << endl;
-		}*/
+		}
 }
