@@ -120,7 +120,7 @@ int main(int argc, char *argv[]){
 				pointsX, pointsY,
 				angles,
 				sin_map, cos_map,
-				initial_length/2,
+				initial_length * length_multiplier,
 				length_multiplier,
 				rotation_angle_degrees,
 				no_of_points,
