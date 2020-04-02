@@ -1,18 +1,20 @@
-//#include "shared/jbutil.h"
+#include "shared/jbutil.h"
+#include <assert.h>
+#include <cstdio>
 #include <iostream>
 #include <cstdlib>
 #include <cmath>
 #include <map>
 #include <climits>
-#include <assert.h>
 
 using std::cout;
+using std::endl;
 using std::cerr;
 using std::endl;
 using std::string;
 
-//using jbutil::matrix;
-//using jbutil::image;
+using jbutil::matrix;
+using jbutil::image;
 
 __global__ void populate_sin_cos_maps(float *sin_map, float *cos_map){
 		float rad = threadIdx.x * 0.01745329251f; // small number is pi/180
@@ -32,7 +34,7 @@ __global__ void calculate_points(
 {
 		float line_length = 1*length_multiplier;
 
-		const unsigned int index = blockIdx.x * blockDim.x + threadIdx.x;
+		const unsigned long index = blockIdx.x * blockDim.x + threadIdx.x;
 
 		for(int i = 0; i < iterations; ++i){
 				if( index < (1 << i) ){ // first we compute first 2, then next 4, then next 8, etc
@@ -66,7 +68,7 @@ __global__ void calculate_points_single_iteration(
 		unsigned long start_index
 )
 {
-		const unsigned int index = blockIdx.x * blockDim.x + threadIdx.x;
+		const unsigned long index = blockIdx.x * blockDim.x + threadIdx.x;
 
 		unsigned int array_index = index*2 + start_index; // first 2 already initialized
 		unsigned int array_index_plus_1 = array_index + 1; // first 2 already initialized
@@ -82,11 +84,11 @@ __global__ void calculate_points_single_iteration(
 }
 
 __global__ void calculateMin(float *points, float *storeList, float *retValue, const int iterations, unsigned long no_of_threads){
-		const unsigned int index = blockIdx.x * blockDim.x + threadIdx.x;
+		const unsigned long index = blockIdx.x * blockDim.x + threadIdx.x;
 		if(index < no_of_threads){
 			 storeList[index] = points[ index*2 + (points[index*2] > points[index*2 + 1]) ];
 		}
-		
+
 		no_of_threads /= 2;
 		__syncthreads();
 
@@ -97,26 +99,26 @@ __global__ void calculateMin(float *points, float *storeList, float *retValue, c
 				no_of_threads/=2;
 				__syncthreads();
 		}
-		
+
 		*retValue = storeList[0];
 }
 
 __global__ void calculateMin_single_iteration(float *points, float *storeList){
-		const unsigned int index = blockIdx.x * blockDim.x + threadIdx.x;
+		const unsigned long index = blockIdx.x * blockDim.x + threadIdx.x;
 		storeList[index] = points[ index*2 + (points[index*2] > points[index*2 + 1]) ];
 }
 
 __global__ void calculateMax_single_iteration(float *points, float *storeList){
-		const unsigned int index = blockIdx.x * blockDim.x + threadIdx.x;
+		const unsigned long index = blockIdx.x * blockDim.x + threadIdx.x;
 		storeList[index] = points[ index*2 + (points[index*2] < points[index*2 + 1]) ];
 }
 
 __global__ void calculateMax(float *points, float *storeList, float *retValue, const int iterations, unsigned long no_of_threads){
-		const unsigned int index = blockIdx.x * blockDim.x + threadIdx.x;
+		const unsigned long index = blockIdx.x * blockDim.x + threadIdx.x;
 		if(index < no_of_threads){
 			 storeList[index] = points[ index*2 + (points[index*2] < points[index*2 + 1]) ];
 		}
-		
+
 		no_of_threads /= 2;
 		__syncthreads();
 
@@ -127,7 +129,7 @@ __global__ void calculateMax(float *points, float *storeList, float *retValue, c
 				no_of_threads/=2;
 				__syncthreads();
 		}
-		
+
 		*retValue = storeList[0];
 }
 
@@ -137,12 +139,54 @@ __global__ void map_points_to_pixels(float *pointsX, float *pointsY, const float
 		pointsY[i] = pointsY[i] * y_mul + y_add;
 }
 
+__global__ void initialize_all_to_zero(int *m_image, int max_size){
+	const unsigned int index = blockIdx.x * blockDim.x + threadIdx.x;
+	if(index < max_size){
+		m_image[index] = 255;
+	}
+}
+
+__global__ void draw_points(const float *pointsX, const float *pointsY, int *m_image, const int image_height){
+	const unsigned long index = blockIdx.x * blockDim.x + threadIdx.x;
+	const unsigned long index_div_2 = index/2;
+
+	// smaller x
+	float px1 = pointsX[index];
+	float px2 = pointsX[index_div_2];
+	float py1 = pointsY[index];
+	float py2 = pointsY[index_div_2];
+
+	// absolute difference without elif
+	float diffX = (px1-px2)*(px1>=px2) + (px2-px1)*(px2>px1);
+	float diffY = (py1-py2)*(py1>=py2) + (py2-py1)*(py2>py1);
+
+	float x_increase = ( ( 1*(diffX>=diffY) + (diffX/(diffY+(diffY==0)))*(diffX<diffY) ) * ( (px2-px1)/ (diffX+(diffX==0)) ) );
+	float y_increase = ( ( (diffY/(diffX+(diffX==0)))*(diffX>=diffY) + 1*(diffX<diffY) ) * ( (py2-py1)/(diffY+(diffY==0)) ) );
+
+	float startx = round(px1) * (diffX>=diffY) + px1 * (diffX<diffY);
+	float starty = py1 * (diffX>=diffY) + round(py1) * (diffX<diffY);
+
+
+
+	float endx = round(px2);
+	float endy = round(py2);
+
+	printf("%d %f %f %d %f %f %f %f\n", index, startx, endx ,image_height, starty, endy, x_increase, y_increase);
+
+	float x = startx, y = starty;
+	for(; ((diffX>=diffY) & (round(x) != endx)) | ((diffY>diffX) & (round(y) != endy)); x+=x_increase, y+=y_increase){
+		if(index==1)printf("%d %f %f\n", lround(x) * image_height + lround(y), x, y);
+		m_image[lround(x) * image_height + lround(y)] = 0;
+	}
+	if(index==1)printf("%d %f %f\n", lround(x) * image_height + lround(y), x, y);
+	m_image[lround(x) * image_height + lround(y)] = 255 - 255*(index != 0);
+}
 
 int main(int argc, char *argv[]){
-		int image_width=1024, image_height=1024;
+		int image_width=1024, image_height=512;
 		float length_multiplier = 1; // (multiply the current line's length by this number
-		int rotation_angle_degrees = 90; // (The amount to rotate per iteration) must be between 0 and 180
-		int iterations = 15; // (number of iterations) Must be between 1 and 26 (both included) otherwise it uses too much memory, as memory usage is 10x2^iterations bytes
+		int rotation_angle_degrees = 30; // (The amount to rotate per iteration) must be between 0 and 180
+		int iterations = 3; // (number of iterations) Must be between 1 and 26 (both included) otherwise it uses too much memory, as memory usage is 10x2^iterations bytes
 
 		const unsigned long no_of_points = (1 << (iterations));
 
@@ -181,6 +225,9 @@ int main(int argc, char *argv[]){
 		cudaMalloc((void**) &minMax_X_Y, sizeof(float) * 3);
 		cudaMalloc((void**) &minMaxWorkingList, float_list_size/2);
 
+		int *m_image;
+		cudaMalloc((void**) &m_image, sizeof(int) * image_height * image_width);
+
 		// --------- START TIMING PART 1 ----------
 
 		populate_sin_cos_maps<<<1, map_size>>>(sin_map, cos_map);
@@ -192,7 +239,7 @@ int main(int argc, char *argv[]){
 				calculate_points_single_iteration<<<i/1024, 512>>>(angles, pointsX, pointsY, line_length, length_multiplier, rotation_angle_degrees, sin_map, cos_map, i);
 		}
 
-		
+
 		//cudaFree(angles);
 
 		bool firstTime = true;
@@ -223,7 +270,7 @@ int main(int argc, char *argv[]){
 				calculateMin<<<1, 512>>>(pointsY, minMaxWorkingList, &minMax_X_Y[1], iterations, no_of_points/2);
 		}else{
 				calculateMin<<<1, 512>>>(minMaxWorkingList, minMaxWorkingList, &minMax_X_Y[1], iterations, no_of_points/2);
-		}	
+		}
 
 		firstTime = true;
 		for(int i = no_of_points; i > 1024; i /= 2){
@@ -240,8 +287,31 @@ int main(int argc, char *argv[]){
 				calculateMax<<<1, 512>>>(minMaxWorkingList, minMaxWorkingList, &minMax_X_Y[2], iterations, no_of_points/2);
 		}
 
+	float maxX_minY_maxY[3];
+	cudaMemcpy(maxX_minY_maxY, minMax_X_Y, sizeof(float) * 3, cudaMemcpyDeviceToHost);
+	float x_mul = (maxX_minY_maxY[0] == 0)? 1: (image_width-1)/(maxX_minY_maxY[0]*2);
+	float x_add = (image_width-1)/2.0f;
+	float y_mul = (maxX_minY_maxY[2]==maxX_minY_maxY[1])? (image_height-1) : -(image_height-1)/(maxX_minY_maxY[2] - maxX_minY_maxY[1]);
+	float y_add = (maxX_minY_maxY[2]==maxX_minY_maxY[1])? 0 : (image_height-1) + (image_height-1)/(maxX_minY_maxY[2]-maxX_minY_maxY[1]) * maxX_minY_maxY[1];
 
-		// make the host block until the device is finished with foo
+	map_points_to_pixels<<<blocks, ((no_of_points<512)? no_of_points : 512)>>>(pointsX, pointsY, x_mul, x_add, y_mul, y_add);
+
+	short *a = (short*)malloc(short_list_size);
+	float *px = (float*)malloc(float_list_size);
+	float *py = (float*)malloc(float_list_size);
+	cudaMemcpy(a, angles, short_list_size, cudaMemcpyDeviceToHost);
+	cudaMemcpy(px, pointsX, float_list_size, cudaMemcpyDeviceToHost);
+	cudaMemcpy(py, pointsY, float_list_size, cudaMemcpyDeviceToHost);
+
+	// --------- STOP TIMING PART 1 ----------
+
+	// --------- START TIMING PART 2 ----------
+	initialize_all_to_zero<<<(image_width*image_height)/512 + ((image_width*image_height)%512 != 0), 512>>>(m_image, image_width*image_height);
+
+	draw_points<<<(no_of_points<512)? 1 : no_of_points/512, ((no_of_points<512)? no_of_points : 512)>>>(pointsX, pointsY, m_image, image_height);
+	// --------- STOP TIMING PART 2 ----------
+
+	// make the host block until the device is finished with foo
   cudaDeviceSynchronize();
 		 // check for error
   cudaError_t error = cudaGetLastError();
@@ -251,27 +321,35 @@ int main(int argc, char *argv[]){
     printf("CUDA error: %s\n", cudaGetErrorString(error));
     exit(-1);
   }else{
-				cout << "ok for now" << endl;
-		}
+	  cout << "OK for now" << endl;
+  }
 
+  //SAVE
+  int *m_image_host = (int*)malloc(sizeof(int)*image_width*image_height);
+  cudaMemcpy(m_image_host, m_image, sizeof(int)*image_width*image_height, cudaMemcpyDeviceToHost);
+  matrix<int> m_image_2;
 
+  m_image_2.resize(image_height, image_width);
 
+  for(int x = 0; x < image_width*image_height; ++x){
+	  if(m_image_host[x] == 0){
+		  cout << x << " " << x%image_height << " " << x/image_height << endl;
+	  }
+	    m_image_2(x%image_height, x/image_height) = m_image_host[x];
+  }
 
-		/*float maxX_minY_maxY[3];
-		cudaMemcpy(maxX_minY_maxY, minMax_X_Y, sizeof(float) * 3, cudaMemcpyDeviceToHost);
-		float x_mul = (maxX_minY_maxY[0] == 0)? 1: image_width/(maxX_minY_maxY[0]*2);
-		float x_add = image_width/2.0f;
-		float y_mul = (maxX_minY_maxY[2]==maxX_minY_maxY[1])? image_height : -image_height/(maxX_minY_maxY[2] - maxX_minY_maxY[1]);
-		float y_add = (maxX_minY_maxY[2]==maxX_minY_maxY[1])? 0 : image_height + image_height/(maxX_minY_maxY[2]-maxX_minY_maxY[1]) * maxX_minY_maxY[1];
-
-		map_points_to_pixels<<<blocks, ((no_of_points<512)? no_of_points : 512)>>>(pointsX, pointsY, x_mul, x_add, y_mul, y_add);*/
-
-		// --------- STOP TIMING PART 1 ----------
-
-
-
-
-
+  image<int> image_out = image<int>(image_height, image_width, 1, 255);
+  image_out.set_channel(0, m_image_2);
+  char outfile[150];
+	sprintf(outfile, "output_images/%d x%d _m=%.2f _theta=%d _n= %.0d.pgm",
+			image_width, image_height,
+			length_multiplier,
+			rotation_angle_degrees,
+			iterations);
+	std::ofstream file_out(outfile);
+	image_out.save(file_out);
+	/*
+	cout << "done" << endl;
 
 		short *a = (short*)malloc(short_list_size);
 		float *px = (float*)malloc(float_list_size);
@@ -300,5 +378,5 @@ int main(int argc, char *argv[]){
 		cout << endl << endl;
 		for(int i = 0; i < 3; ++i){
 				cout << minMax_X_Y_local[i] << endl;
-		}
+		}*/
 }
