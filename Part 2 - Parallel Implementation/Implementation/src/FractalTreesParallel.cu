@@ -17,366 +17,379 @@ using jbutil::matrix;
 using jbutil::image;
 
 __global__ void populate_sin_cos_maps(float *sin_map, float *cos_map){
-		float rad = threadIdx.x * 0.01745329251f; // small number is pi/180
-	 sincosf(rad, &sin_map[threadIdx.x], &cos_map[threadIdx.x]);
+  float rad = threadIdx.x * 0.01745329251f; // small number is pi/180
+  sincosf(rad, &sin_map[threadIdx.x], &cos_map[threadIdx.x]);
 }
 
 __global__ void calculate_points(
-		short *angles,
-		float *pointsX,
-		float *pointsY,
-		const int iterations,
-		const float length_multiplier,
-		const int rotation_angle_degrees,
-		float *sin_map,
-		float *cos_map
+  short *angles,
+  float *pointsX,
+  float *pointsY,
+  const int iterations,
+  const float length_multiplier,
+  const int rotation_angle_degrees,
+  float *sin_map,
+  float *cos_map
 )
 {
-		float line_length = 1*length_multiplier;
+  float line_length = 1*length_multiplier;
 
-		const unsigned long index = blockIdx.x * blockDim.x + threadIdx.x;
+  const unsigned long index = blockIdx.x * blockDim.x + threadIdx.x;
 
-		for(int i = 0; i < iterations; ++i){
-				if( index < (1 << i) ){ // first we compute first 2, then next 4, then next 8, etc
-						unsigned int array_index = index*2 + (2<<i); // first 2 already initialized
-						unsigned int array_index_plus_1 = array_index + 1; // first 2 already initialized
-						unsigned int array_index_div_2 = array_index >> 1;
+  for(int i = 0; i < iterations; ++i){
+    if( index < (1 << i) ){ // first we compute first 2, then next 4, then next 8, etc
+      unsigned int array_index = index*2 + (2<<i); // first 2 already initialized
+      unsigned int array_index_plus_1 = array_index + 1; // first 2 already initialized
+      unsigned int array_index_div_2 = array_index >> 1;
 
-						angles[array_index] = ( (angles[array_index_div_2] + rotation_angle_degrees) ) % 360;
-						angles[array_index_plus_1] = ( (angles[array_index_div_2] - rotation_angle_degrees) + 360 ) % 360;
+      angles[array_index] = ( (angles[array_index_div_2] + rotation_angle_degrees) ) % 360;
+      angles[array_index_plus_1] = ( (angles[array_index_div_2] - rotation_angle_degrees) + 360 ) % 360;
 
-						pointsX[array_index] = pointsX[array_index_div_2] + line_length * sin_map[ (angles[array_index]) ];
-					 pointsY[array_index] = pointsY[array_index_div_2] + line_length * cos_map[ (angles[array_index]) ];
-						pointsX[array_index_plus_1] = pointsX[array_index_div_2] + line_length * sin_map[ (angles[array_index_plus_1]) ];
-						pointsY[array_index_plus_1] = pointsY[array_index_div_2] + line_length * cos_map[ (angles[array_index_plus_1]) ];
-				}
-				__syncthreads();
-				line_length *= length_multiplier;
-				__syncthreads();
-		}
+      pointsX[array_index] = pointsX[array_index_div_2] + line_length * sin_map[ (angles[array_index]) ];
+      pointsY[array_index] = pointsY[array_index_div_2] + line_length * cos_map[ (angles[array_index]) ];
+      pointsX[array_index_plus_1] = pointsX[array_index_div_2] + line_length * sin_map[ (angles[array_index_plus_1]) ];
+      pointsY[array_index_plus_1] = pointsY[array_index_div_2] + line_length * cos_map[ (angles[array_index_plus_1]) ];
+    }
+    __syncthreads();
+    line_length *= length_multiplier;
+    __syncthreads();
+  }
 }
 
 __global__ void calculate_points_single_iteration(
-		short *angles,
-		float *pointsX,
-		float *pointsY,
-		float line_length,
-		const float length_multiplier,
-		const int rotation_angle_degrees,
-		float *sin_map,
-		float *cos_map,
-		unsigned long start_index
+  short *angles,
+  float *pointsX,
+  float *pointsY,
+  float line_length,
+  const float length_multiplier,
+  const int rotation_angle_degrees,
+  float *sin_map,
+  float *cos_map,
+  unsigned long start_index
 )
 {
-		const unsigned long index = blockIdx.x * blockDim.x + threadIdx.x;
+  const unsigned long index = blockIdx.x * blockDim.x + threadIdx.x;
 
-		unsigned int array_index = index*2 + start_index; // first 2 already initialized
-		unsigned int array_index_plus_1 = array_index + 1; // first 2 already initialized
-		unsigned int array_index_div_2 = array_index >> 1;
+  unsigned int array_index = index*2 + start_index; // first 2 already initialized
+  unsigned int array_index_plus_1 = array_index + 1; // first 2 already initialized
+  unsigned int array_index_div_2 = array_index >> 1;
 
-		angles[array_index] = ( (angles[array_index_div_2] + rotation_angle_degrees) ) % 360;
-		angles[array_index_plus_1] = ( (angles[array_index_div_2] - rotation_angle_degrees) + 360 ) % 360;
+  angles[array_index] = ( (angles[array_index_div_2] + rotation_angle_degrees) ) % 360;
+  angles[array_index_plus_1] = ( (angles[array_index_div_2] - rotation_angle_degrees) + 360 ) % 360;
 
-		pointsX[array_index] = pointsX[array_index_div_2] + line_length * sin_map[ (angles[array_index]) ];
-		pointsY[array_index] = pointsY[array_index_div_2] + line_length * cos_map[ (angles[array_index]) ];
-		pointsX[array_index_plus_1] = pointsX[array_index_div_2] + line_length * sin_map[ (angles[array_index_plus_1]) ];
-		pointsY[array_index_plus_1] = pointsY[array_index_div_2] + line_length * cos_map[ (angles[array_index_plus_1]) ];
+  pointsX[array_index] = pointsX[array_index_div_2] + line_length * sin_map[ (angles[array_index]) ];
+  pointsY[array_index] = pointsY[array_index_div_2] + line_length * cos_map[ (angles[array_index]) ];
+  pointsX[array_index_plus_1] = pointsX[array_index_div_2] + line_length * sin_map[ (angles[array_index_plus_1]) ];
+  pointsY[array_index_plus_1] = pointsY[array_index_div_2] + line_length * cos_map[ (angles[array_index_plus_1]) ];
 }
 
 __global__ void calculateMin(float *points, float *storeList, float *retValue, const int iterations, unsigned long no_of_threads){
-		const unsigned long index = blockIdx.x * blockDim.x + threadIdx.x;
-		if(index < no_of_threads){
-			 storeList[index] = points[ index*2 + (points[index*2] > points[index*2 + 1]) ];
-		}
+  const unsigned long index = blockIdx.x * blockDim.x + threadIdx.x;
+  if(index < no_of_threads){
+    storeList[index] = points[ index*2 + (points[index*2] > points[index*2 + 1]) ];
+  }
 
-		no_of_threads /= 2;
-		__syncthreads();
+  no_of_threads /= 2;
+  __syncthreads();
 
-		for(int i = 1; i < iterations; ++i){ // start i from 1 as the first iteration has already been done
-				if(index < no_of_threads){
-						storeList[index] = storeList[ index*2 + (storeList[index*2] > storeList[index*2 + 1]) ];
-				}
-				no_of_threads/=2;
-				__syncthreads();
-		}
+  for(int i = 1; i < iterations; ++i){ // start i from 1 as the first iteration has already been done
+    if(index < no_of_threads){
+      storeList[index] = storeList[ index*2 + (storeList[index*2] > storeList[index*2 + 1]) ];
+    }
+    no_of_threads/=2;
+    __syncthreads();
+  }
 
-		*retValue = storeList[0];
+  *retValue = storeList[0];
 }
 
 __global__ void calculateMin_single_iteration(float *points, float *storeList){
-		const unsigned long index = blockIdx.x * blockDim.x + threadIdx.x;
-		storeList[index] = points[ index*2 + (points[index*2] > points[index*2 + 1]) ];
-}
-
-__global__ void calculateMax_single_iteration(float *points, float *storeList){
-		const unsigned long index = blockIdx.x * blockDim.x + threadIdx.x;
-		storeList[index] = points[ index*2 + (points[index*2] < points[index*2 + 1]) ];
+  const unsigned long index = blockIdx.x * blockDim.x + threadIdx.x;
+  storeList[index] = points[ index*2 + (points[index*2] > points[index*2 + 1]) ];
 }
 
 __global__ void calculateMax(float *points, float *storeList, float *retValue, const int iterations, unsigned long no_of_threads){
-		const unsigned long index = blockIdx.x * blockDim.x + threadIdx.x;
-		if(index < no_of_threads){
-			 storeList[index] = points[ index*2 + (points[index*2] < points[index*2 + 1]) ];
-		}
+  const unsigned long index = blockIdx.x * blockDim.x + threadIdx.x;
+  if(index < no_of_threads){
+    storeList[index] = points[ index*2 + (points[index*2] < points[index*2 + 1]) ];
+    //storeList[index] = fmaxf(points[index*2], points[index*2 + 1]);
+  }
 
-		no_of_threads /= 2;
-		__syncthreads();
+  no_of_threads /= 2;
+  __syncthreads();
 
-		for(int i = 1; i < iterations; ++i){ // start i from 1 as the first iteration has already been done
-				if(index < no_of_threads){
-						storeList[index] = storeList[ index*2 + (storeList[index*2] < storeList[index*2 + 1]) ];
-				}
-				no_of_threads/=2;
-				__syncthreads();
-		}
+  for(int i = 1; i < iterations; ++i){ // start i from 1 as the first iteration has already been done
+    if(index < no_of_threads){
+      storeList[index] = points[ index*2 + (points[index*2] < points[index*2 + 1]) ];
+      //storeList[index] = fmaxf(points[index*2], points[index*2 + 1]);
+    }
+    no_of_threads/=2;
+    __syncthreads();
+  }
 
-		*retValue = storeList[0];
+  *retValue = storeList[0];
+}
+
+__global__ void calculateMax_single_iteration(float *points, float *storeList){
+  const unsigned long index = blockIdx.x * blockDim.x + threadIdx.x;
+  storeList[index] = points[ index*2 + (points[index*2] < points[index*2 + 1]) ];
+  //storeList[index] = fmaxf(points[index*2], points[index*2 + 1]);
 }
 
 __global__ void map_points_to_pixels(float *pointsX, float *pointsY, const float x_mul, const float x_add, const float y_mul, const float y_add){
-		const unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
-		pointsX[i] = pointsX[i] * x_mul + x_add;
-		pointsY[i] = pointsY[i] * y_mul + y_add;
+  const unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+  pointsX[i] = pointsX[i] * x_mul + x_add;
+  pointsY[i] = pointsY[i] * y_mul + y_add;
 }
 
-__global__ void initialize_all_to_zero(int *m_image, int max_size){
-	const unsigned int index = blockIdx.x * blockDim.x + threadIdx.x;
-	if(index < max_size){
-		m_image[index] = 255;
-	}
+__global__ void initialize_all_to_zero(short *m_image, int max_size){
+  const unsigned int index = blockIdx.x * blockDim.x + threadIdx.x;
+  if(index < max_size){
+    m_image[index] = 255;
+  }
 }
 
-__global__ void draw_points(const float *pointsX, const float *pointsY, int *m_image, const int image_height){
-	const unsigned long index = blockIdx.x * blockDim.x + threadIdx.x;
-	const unsigned long index_div_2 = index/2;
+__global__ void draw_points(const float *pointsX, const float *pointsY, short *m_image, const int image_height){
+  const unsigned long index = blockIdx.x * blockDim.x + threadIdx.x;
+  const unsigned long index_div_2 = index/2;
 
-	// smaller x
-	float px1 = pointsX[index];
-	float px2 = pointsX[index_div_2];
-	float py1 = pointsY[index];
-	float py2 = pointsY[index_div_2];
+  // smaller x
+  float px1 = pointsX[index];
+  float px2 = pointsX[index_div_2];
+  float py1 = pointsY[index];
+  float py2 = pointsY[index_div_2];
 
-	// absolute difference without elif
-	float diffX = (px1-px2)*(px1>=px2) + (px2-px1)*(px2>px1);
-	float diffY = (py1-py2)*(py1>=py2) + (py2-py1)*(py2>py1);
+  // absolute difference without elif
+  float diffX = (px1-px2)*(px1>=px2) + (px2-px1)*(px2>px1);
+  float diffY = (py1-py2)*(py1>=py2) + (py2-py1)*(py2>py1);
 
-	float x_increase = ( ( 1*(diffX>=diffY) + (diffX/(diffY+(diffY==0)))*(diffX<diffY) ) * ( (px2-px1)/ (diffX+(diffX==0)) ) );
-	float y_increase = ( ( (diffY/(diffX+(diffX==0)))*(diffX>=diffY) + 1*(diffX<diffY) ) * ( (py2-py1)/(diffY+(diffY==0)) ) );
+  float x_increase = ( ( 1*(diffX>=diffY) + (diffX/(diffY+(diffY==0)))*(diffX<diffY) ) * ( (px2-px1)/ (diffX+(diffX==0)) ) );
+  float y_increase = ( ( (diffY/(diffX+(diffX==0)))*(diffX>=diffY) + 1*(diffX<diffY) ) * ( (py2-py1)/(diffY+(diffY==0)) ) );
 
-	float startx = round(px1) * (diffX>=diffY) + px1 * (diffX<diffY);
-	float starty = py1 * (diffX>=diffY) + round(py1) * (diffX<diffY);
+  float startx = round(px1) * (diffX>=diffY) + px1 * (diffX<diffY);
+  float starty = py1 * (diffX>=diffY) + round(py1) * (diffX<diffY);
 
+  float endx = round(px2);
+  float endy = round(py2);
 
-
-	float endx = round(px2);
-	float endy = round(py2);
-
-	printf("%d %f %f %d %f %f %f %f\n", index, startx, endx ,image_height, starty, endy, x_increase, y_increase);
-
-	float x = startx, y = starty;
-	for(; ((diffX>=diffY) & (round(x) != endx)) | ((diffY>diffX) & (round(y) != endy)); x+=x_increase, y+=y_increase){
-		if(index==1)printf("%d %f %f\n", lround(x) * image_height + lround(y), x, y);
-		m_image[lround(x) * image_height + lround(y)] = 0;
-	}
-	if(index==1)printf("%d %f %f\n", lround(x) * image_height + lround(y), x, y);
-	m_image[lround(x) * image_height + lround(y)] = 255 - 255*(index != 0);
+  float x = startx, y = starty;
+  for(; ((diffX>=diffY) & (round(x) != endx)) | ((diffY>diffX) & (round(y) != endy)); x+=x_increase, y+=y_increase){
+    m_image[lround(x) * image_height + lround(y)] = 0;
+  }
+  m_image[lround(x) * image_height + lround(y)] = 255 - 255*(index != 0);
 }
 
 int main(int argc, char *argv[]){
-		int image_width=1024, image_height=512;
-		float length_multiplier = 1; // (multiply the current line's length by this number
-		int rotation_angle_degrees = 30; // (The amount to rotate per iteration) must be between 0 and 180
-		int iterations = 3; // (number of iterations) Must be between 1 and 26 (both included) otherwise it uses too much memory, as memory usage is 10x2^iterations bytes
-
-		const unsigned long no_of_points = (1 << (iterations));
-
-		// Declare the line length
-		float line_length = 1;
-		for(int i = 0; i < 11; ++i){
-				line_length*=length_multiplier;
-		}
-
-		// Declare sin and cosine maps
-		float *sin_map, *cos_map;
-		const int map_size = (360 + 360%32);
-		const int map_physical_size = map_size * sizeof(float);
-		cudaMalloc((void**) &sin_map, map_physical_size);
-		cudaMalloc((void**) &cos_map, map_physical_size);
-
-		// Declare angles and pointsX and pointsY lists
-		short *angles;
-		float *pointsX, *pointsY;
-		const unsigned long short_list_size = no_of_points * sizeof(short);
-		const unsigned long float_list_size = no_of_points * sizeof(float);
-		cudaMalloc((void**) &angles, short_list_size);
-		cudaMalloc((void**) &pointsX, float_list_size);
-		cudaMalloc((void**) &pointsY, float_list_size);
-
-		// initilize the first 2 of angles, pointsX and pointsY
-		short angles_host[] = {0, 0};
-		float pointsX_host[] = {0, 0};
-		float pointsY_host[] = {0, 1};
-		cudaMemcpy(angles, angles_host, 2*sizeof(short), cudaMemcpyHostToDevice);
-		cudaMemcpy(pointsX, pointsX_host, 2*sizeof(float), cudaMemcpyHostToDevice);
-		cudaMemcpy(pointsY, pointsY_host, 2*sizeof(float), cudaMemcpyHostToDevice);
-
-		float *minMax_X_Y; //Order: minX, minY, maxY (we do not need maxX as this is just minX*-1)
-		float *minMaxWorkingList;
-		cudaMalloc((void**) &minMax_X_Y, sizeof(float) * 3);
-		cudaMalloc((void**) &minMaxWorkingList, float_list_size/2);
-
-		int *m_image;
-		cudaMalloc((void**) &m_image, sizeof(int) * image_height * image_width);
-
-		// --------- START TIMING PART 1 ----------
-
-		populate_sin_cos_maps<<<1, map_size>>>(sin_map, cos_map);
-
-		unsigned int blocks = no_of_points/512 + (no_of_points % 512 != 0);
-
-		calculate_points<<<1, 512>>>(angles, pointsX, pointsY, ((iterations-1 < 10)? iterations-1 : 10), length_multiplier, rotation_angle_degrees, sin_map, cos_map);
-		for(int i = 2048; i < no_of_points; i *= 2){
-				calculate_points_single_iteration<<<i/1024, 512>>>(angles, pointsX, pointsY, line_length, length_multiplier, rotation_angle_degrees, sin_map, cos_map, i);
-		}
-
-
-		//cudaFree(angles);
-
-		bool firstTime = true;
-		for(int i = no_of_points; i > 1024; i /= 2){
-				if(firstTime){
-						calculateMax_single_iteration<<<i/512, 512>>>(pointsX, minMaxWorkingList);
-						firstTime = false;
-				}else{
-						calculateMax_single_iteration<<<i/512, 512>>>(minMaxWorkingList, minMaxWorkingList);
-				}
-		}
-		if(firstTime){
-				calculateMax<<<1, 512>>>(pointsX, minMaxWorkingList, &minMax_X_Y[0], iterations, no_of_points/2);
-		}else{
-				calculateMax<<<1, 512>>>(minMaxWorkingList, minMaxWorkingList, &minMax_X_Y[0], iterations, no_of_points/2);
-		}
-
-	 firstTime = true;
-		for(int i = no_of_points; i > 1024; i /= 2){
-				if(firstTime){
-						calculateMin_single_iteration<<<i/512, 512>>>(pointsY, minMaxWorkingList);
-						firstTime = false;
-				}else{
-						calculateMin_single_iteration<<<i/512, 512>>>(minMaxWorkingList, minMaxWorkingList);
-				}
-		}
-		if(firstTime){
-				calculateMin<<<1, 512>>>(pointsY, minMaxWorkingList, &minMax_X_Y[1], iterations, no_of_points/2);
-		}else{
-				calculateMin<<<1, 512>>>(minMaxWorkingList, minMaxWorkingList, &minMax_X_Y[1], iterations, no_of_points/2);
-		}
-
-		firstTime = true;
-		for(int i = no_of_points; i > 1024; i /= 2){
-				if(firstTime){
-						calculateMax_single_iteration<<<i/512, 512>>>(pointsY, minMaxWorkingList);
-						firstTime = false;
-				}else{
-						calculateMax_single_iteration<<<i/512, 512>>>(minMaxWorkingList, minMaxWorkingList);
-				}
-		}
-		if(firstTime){
-				calculateMax<<<1, 512>>>(pointsY, minMaxWorkingList, &minMax_X_Y[2], iterations, no_of_points/2);
-		}else{
-				calculateMax<<<1, 512>>>(minMaxWorkingList, minMaxWorkingList, &minMax_X_Y[2], iterations, no_of_points/2);
-		}
-
-	float maxX_minY_maxY[3];
-	cudaMemcpy(maxX_minY_maxY, minMax_X_Y, sizeof(float) * 3, cudaMemcpyDeviceToHost);
-	float x_mul = (maxX_minY_maxY[0] == 0)? 1: (image_width-1)/(maxX_minY_maxY[0]*2);
-	float x_add = (image_width-1)/2.0f;
-	float y_mul = (maxX_minY_maxY[2]==maxX_minY_maxY[1])? (image_height-1) : -(image_height-1)/(maxX_minY_maxY[2] - maxX_minY_maxY[1]);
-	float y_add = (maxX_minY_maxY[2]==maxX_minY_maxY[1])? 0 : (image_height-1) + (image_height-1)/(maxX_minY_maxY[2]-maxX_minY_maxY[1]) * maxX_minY_maxY[1];
-
-	map_points_to_pixels<<<blocks, ((no_of_points<512)? no_of_points : 512)>>>(pointsX, pointsY, x_mul, x_add, y_mul, y_add);
-
-	short *a = (short*)malloc(short_list_size);
-	float *px = (float*)malloc(float_list_size);
-	float *py = (float*)malloc(float_list_size);
-	cudaMemcpy(a, angles, short_list_size, cudaMemcpyDeviceToHost);
-	cudaMemcpy(px, pointsX, float_list_size, cudaMemcpyDeviceToHost);
-	cudaMemcpy(py, pointsY, float_list_size, cudaMemcpyDeviceToHost);
-
-	// --------- STOP TIMING PART 1 ----------
-
-	// --------- START TIMING PART 2 ----------
-	initialize_all_to_zero<<<(image_width*image_height)/512 + ((image_width*image_height)%512 != 0), 512>>>(m_image, image_width*image_height);
-
-	draw_points<<<(no_of_points<512)? 1 : no_of_points/512, ((no_of_points<512)? no_of_points : 512)>>>(pointsX, pointsY, m_image, image_height);
-	// --------- STOP TIMING PART 2 ----------
-
-	// make the host block until the device is finished with foo
-  cudaDeviceSynchronize();
-		 // check for error
-  cudaError_t error = cudaGetLastError();
-  if(error != cudaSuccess)
+  if (argc != 6)
   {
-    // print the CUDA error message and exit
-    printf("CUDA error: %s\n", cudaGetErrorString(error));
-    exit(-1);
-  }else{
-	  cout << "OK for now" << endl;
+    cout << "Error: wrong number of parameters\n"
+         << "Usage:\n\t<output image width>\n\t<output image height>\n\t"
+         << "<length multiplier per iteration>\n\t<rotation per iteration (in degrees) - between 0 and 180>\n\t"
+         << "<number of iterations - between 1 and 26>" << endl;
+    exit(1);
   }
 
+  int image_width = atoi(argv[1]), image_height = atoi(argv[2]);
+  float length_multiplier = atof(argv[3]);
+  int rotation_angle_degrees = atoi(argv[4]);
+  int iterations = atoi(argv[5]);
+
+  if (0 > rotation_angle_degrees || rotation_angle_degrees > 180){
+    failwith("Please enter a number of angle degrees between 0 and 180 (both included)");
+  }
+
+  if(0 > iterations || iterations > 24){
+    failwith("Please enter a number of iterations between 1 and 24(both included)"); // otherwise a memory overflow occurs
+  }
+
+  /* for testing
+  int image_width=1024, image_height=512;
+  float length_multiplier = 1.1; // (multiply the current line's length by this number
+  int rotation_angle_degrees = 30; // (The amount to rotate per iteration) must be between 0 and 180
+  int iterations = 15; // (number of iterations) Must be between 1 and 26 (both included) otherwise it uses too much memory, as memory usage is 10x2^iterations bytes
+  */
+
+  const unsigned long no_of_points = (1 << (iterations));
+
+  // Declare the line length (after the first 11 iterations, since we use an internal line length in the gpu functions)
+  float line_length = 1;
+  for(int i = 0; i < 11; ++i){
+    line_length*=length_multiplier;
+  }
+
+  // Declare sin and cosine maps
+  float *sin_map, *cos_map;
+  const int map_size = (360 + 360%32); // 32 for the warp size
+  const int map_physical_size = map_size * sizeof(float);
+  cudaMalloc((void**) &sin_map, map_physical_size);
+  cudaMalloc((void**) &cos_map, map_physical_size);
+
+  // Declare angles and pointsX and pointsY lists (stored within the gpu)
+  short *angles;
+  float *pointsX, *pointsY;
+  const unsigned long short_list_size = no_of_points * sizeof(short);
+  const unsigned long float_list_size = no_of_points * sizeof(float);
+  cudaMalloc((void**) &angles, short_list_size);
+  cudaMalloc((void**) &pointsX, float_list_size);
+  cudaMalloc((void**) &pointsY, float_list_size);
+
+  // initilize the first 2 of angles, pointsX and pointsY
+  short angles_host[] = {0, 0};
+  float pointsX_host[] = {0, 0};
+  float pointsY_host[] = {0, 1};
+  cudaMemcpy(angles, angles_host, 2*sizeof(short), cudaMemcpyHostToDevice);
+  cudaMemcpy(pointsX, pointsX_host, 2*sizeof(float), cudaMemcpyHostToDevice);
+  cudaMemcpy(pointsY, pointsY_host, 2*sizeof(float), cudaMemcpyHostToDevice);
+
+  float *minMax_X_Y; //Order: maxX, minY, maxY (we do not need minX as this is just maxX*-1)
+  float *minMaxWorkingList;
+  cudaMalloc((void**) &minMax_X_Y, sizeof(float) * 3);
+  cudaMalloc((void**) &minMaxWorkingList, float_list_size/2);
+
+  // --------- START TIMING PART 1 ----------
+  double t = jbutil::gettime();
+
+  populate_sin_cos_maps<<<1, map_size>>>(sin_map, cos_map);
+  calculate_points<<<1, 512>>>(
+    angles,
+    pointsX,
+    pointsY,
+    ((iterations-1 < 10)? iterations-1 : 10),
+    length_multiplier,
+    rotation_angle_degrees,
+    sin_map,
+    cos_map
+  );
+  for(int i = 2048; i < no_of_points; i *= 2){
+    calculate_points_single_iteration<<<i/1024, 512>>>(
+      angles,
+      pointsX,
+      pointsY,
+      line_length,
+      length_multiplier,
+      rotation_angle_degrees,
+      sin_map,
+      cos_map,
+      i
+    );
+  }
+
+  bool firstTime = true;
+  for(int i = no_of_points/2; i > 512; i /= 2){
+    if(firstTime){
+      calculateMax_single_iteration<<<i/1024, 512>>>(pointsX, minMaxWorkingList);
+      firstTime = false;
+    }else{
+      calculateMax_single_iteration<<<i/1024, 512>>>(minMaxWorkingList, minMaxWorkingList);
+    }
+  }
+  if(firstTime){
+    calculateMax<<<1, 512>>>(pointsX, minMaxWorkingList, &minMax_X_Y[0], iterations, no_of_points/2);
+  }else{
+    calculateMax<<<1, 512>>>(minMaxWorkingList, minMaxWorkingList, &minMax_X_Y[0], iterations, no_of_points/2);
+  }
+
+  firstTime = true;
+  for(int i = no_of_points/2; i > 512; i /= 2){
+    if(firstTime){
+      calculateMin_single_iteration<<<i/512, 512>>>(pointsY, minMaxWorkingList);
+      firstTime = false;
+    }else{
+      calculateMin_single_iteration<<<i/512, 512>>>(minMaxWorkingList, minMaxWorkingList);
+    }
+  }
+  if(firstTime){
+    calculateMin<<<1, 512>>>(pointsY, minMaxWorkingList, &minMax_X_Y[1], iterations, no_of_points/2);
+  }else{
+    calculateMin<<<1, 512>>>(minMaxWorkingList, minMaxWorkingList, &minMax_X_Y[1], iterations, no_of_points/2);
+  }
+
+  firstTime = true;
+  for(int i = no_of_points/2; i > 512; i /= 2){
+    if(firstTime){
+      calculateMax_single_iteration<<<i/512, 512>>>(pointsY, minMaxWorkingList);
+      firstTime = false;
+    }else{
+      calculateMax_single_iteration<<<i/512, 512>>>(minMaxWorkingList, minMaxWorkingList);
+    }
+  }
+  if(firstTime){
+    calculateMax<<<1, 512>>>(pointsY, minMaxWorkingList, &minMax_X_Y[2], iterations, no_of_points/2);
+  }else{
+    calculateMax<<<1, 512>>>(minMaxWorkingList, minMaxWorkingList, &minMax_X_Y[2], iterations, no_of_points/2);
+  }
+
+  float maxX_minY_maxY[3];
+  cudaMemcpy(maxX_minY_maxY, minMax_X_Y, sizeof(float) * 3, cudaMemcpyDeviceToHost);
+  float x_mul = (maxX_minY_maxY[0] == 0)? 1: (image_width-1)/(maxX_minY_maxY[0]*2);
+  float x_add = (image_width-1)/2.0f;
+  float y_mul = (maxX_minY_maxY[2]==maxX_minY_maxY[1])? (image_height-1) : -(image_height-1)/(maxX_minY_maxY[2] - maxX_minY_maxY[1]);
+  float y_add = (maxX_minY_maxY[2]==maxX_minY_maxY[1])? 0 : (image_height-1) + (image_height-1)/(maxX_minY_maxY[2]-maxX_minY_maxY[1]) * maxX_minY_maxY[1];
+
+  unsigned int blocks = no_of_points/512 + (no_of_points % 512 != 0);
+  map_points_to_pixels<<<blocks, ((no_of_points<512)? no_of_points : 512)>>>(pointsX, pointsY, x_mul, x_add, y_mul, y_add);
+
+  short *a = (short*)malloc(short_list_size);
+  float *px = (float*)malloc(float_list_size);
+  float *py = (float*)malloc(float_list_size);
+  cudaMemcpy(a, angles, short_list_size, cudaMemcpyDeviceToHost);
+  cudaMemcpy(px, pointsX, float_list_size, cudaMemcpyDeviceToHost);
+  cudaMemcpy(py, pointsY, float_list_size, cudaMemcpyDeviceToHost);
+  // --------- STOP TIMING PART 1 ----------
+  t = jbutil::gettime() - t;
+  std::cerr << "Time taken to generate the points: " << t << "s" << endl;
+
+  // Clean up
+  cudaFree(sin_map);
+  cudaFree(cos_map);
+  cudaFree(angles);
+  cudaFree(minMax_X_Y);
+  cudaFree(minMaxWorkingList);
+
+  short *m_image;
+  cudaMalloc((void**) &m_image, sizeof(short) * image_height * image_width);
+
+  // --------- START TIMING PART 2 ----------
+  t = jbutil::gettime();
+
+  initialize_all_to_zero<<<(image_width*image_height)/512 + ((image_width*image_height)%512 != 0), 512>>>(m_image, image_width*image_height);
+  draw_points<<<(no_of_points<512)? 1 : no_of_points/512, ((no_of_points<512)? no_of_points : 512)>>>(pointsX, pointsY, m_image, image_height);
+
+  // --------- STOP TIMING PART 2 ----------
+  t = jbutil::gettime() - t;
+  std::cerr << "Time taken to generate the points: " << t << "s" << endl;
+
   //SAVE
-  int *m_image_host = (int*)malloc(sizeof(int)*image_width*image_height);
-  cudaMemcpy(m_image_host, m_image, sizeof(int)*image_width*image_height, cudaMemcpyDeviceToHost);
+  // copy from device to host
+  short *m_image_host = (short*)malloc(sizeof(short)*image_width*image_height);
+  cudaMemcpy(m_image_host, m_image, sizeof(short)*image_width*image_height, cudaMemcpyDeviceToHost);
   matrix<int> m_image_2;
 
   m_image_2.resize(image_height, image_width);
 
+  // copy from flattened array to image matrix
   for(int x = 0; x < image_width*image_height; ++x){
-	  if(m_image_host[x] == 0){
-		  cout << x << " " << x%image_height << " " << x/image_height << endl;
-	  }
-	    m_image_2(x%image_height, x/image_height) = m_image_host[x];
+	  m_image_2(x%image_height, x/image_height) = m_image_host[x];
   }
+
+  //Clean up
+  cudaFree(pointsX);
+  cudaFree(pointsY);
+  cudaFree(m_image);
+  free(m_image_host);
 
   image<int> image_out = image<int>(image_height, image_width, 1, 255);
   image_out.set_channel(0, m_image_2);
   char outfile[150];
-	sprintf(outfile, "output_images/%d x%d _m=%.2f _theta=%d _n= %.0d.pgm",
-			image_width, image_height,
-			length_multiplier,
-			rotation_angle_degrees,
-			iterations);
-	std::ofstream file_out(outfile);
-	image_out.save(file_out);
-	/*
-	cout << "done" << endl;
-
-		short *a = (short*)malloc(short_list_size);
-		float *px = (float*)malloc(float_list_size);
-		float *py = (float*)malloc(float_list_size);
-		cudaMemcpy(a, angles, short_list_size, cudaMemcpyDeviceToHost);
-		cudaMemcpy(px, pointsX, float_list_size, cudaMemcpyDeviceToHost);
-		cudaMemcpy(py, pointsY, float_list_size, cudaMemcpyDeviceToHost);
-
-		for(unsigned long i = no_of_points-100; i < no_of_points; ++i){
-				cout << i << " " << a[i] << " " << px[i] << " " << py[i] << endl;
-		}
-
-
-		cout << endl << endl;
-
-		float *t = (float*)malloc(float_list_size/2);
-		cudaMemcpy(t, minMaxWorkingList, float_list_size/2, cudaMemcpyDeviceToHost);
-
-		for(int i = 0; i < no_of_points/2; ++i){
-				//cout << t[i] << endl;
-		}
-
-		float *minMax_X_Y_local = (float*)malloc(sizeof(float)*3);
-		cudaMemcpy(minMax_X_Y_local, minMax_X_Y, sizeof(float) * 3, cudaMemcpyDeviceToHost);
-
-		cout << endl << endl;
-		for(int i = 0; i < 3; ++i){
-				cout << minMax_X_Y_local[i] << endl;
-		}*/
+  sprintf(outfile, "output_images/%d x%d _m=%.2f _theta=%d _n= %.0d.pgm",
+    image_width, image_height,
+    length_multiplier,
+    rotation_angle_degrees,
+    iterations
+  );
+  std::ofstream file_out(outfile);
+  image_out.save(file_out);
 }
+//cudaDeviceSynchronize(); size_t fr, tot; cudaMemGetInfo(&fr, &tot); cout << "mem " << fr << " " << tot << endl;
+//cudaError_t error = cudaGetLastError();if(error != cudaSuccess){printf("CUDA error1: %s\n", cudaGetErrorString(error));exit(-1);}
+
