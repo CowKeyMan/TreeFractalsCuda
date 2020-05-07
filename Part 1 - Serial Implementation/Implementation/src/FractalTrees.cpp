@@ -126,7 +126,6 @@ int main(int argc, char *argv[]){
 				no_of_points,
 				maxX, minY, maxY
 		);
-
 		free(angles);
 
 		map_points_to_pixels(
