@@ -267,7 +267,6 @@ int main(int argc, char *argv[]){
     sin_map,
     cos_map
   );
-
   // calculate the rest, iteration by iteration
   for(int i = 2048; i < no_of_points; i *= 2){
     calculate_points_single_iteration<<<i/1024, 512>>>(
@@ -332,7 +331,6 @@ int main(int argc, char *argv[]){
   }
   float maxX_minY_maxY[3];
   cudaMemcpy(maxX_minY_maxY, minMax_X_Y, sizeof(float) * 3, cudaMemcpyDeviceToHost);
-  cout << maxX_minY_maxY[0] << " " << maxX_minY_maxY[1] << " " << maxX_minY_maxY[2] << endl;
   float x_mul = (maxX_minY_maxY[0] == 0)? 1: (image_width-1)/(maxX_minY_maxY[0]*2);
   float x_add = (image_width-1)/2.0f;
   float y_mul = (maxX_minY_maxY[2]==maxX_minY_maxY[1])? (image_height-1) : -(image_height-1)/(maxX_minY_maxY[2] - maxX_minY_maxY[1]);
