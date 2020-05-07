@@ -284,7 +284,7 @@ int main(int argc, char *argv[]){
 
   // Find Max X
   bool firstTime = true;
-  for(int i = no_of_points/2; i > 1024; i /= 2){
+  for(int i = no_of_points/2; i > 512; i /= 2){
     if(firstTime){
       calculateMax_single_iteration<<<i/512, 512>>>(pointsX, minMaxWorkingList);
       firstTime = false;
@@ -300,7 +300,7 @@ int main(int argc, char *argv[]){
   cudaError_t error = cudaGetLastError();if(error != cudaSuccess){printf("CUDA error1: %s\n", cudaGetErrorString(error));exit(-1);}
   // Find Min Y
   firstTime = true;
-  for(int i = no_of_points/2; i > 1024; i /= 2){
+  for(int i = no_of_points/2; i > 512; i /= 2){
     if(firstTime){
       calculateMin_single_iteration<<<i/512, 512>>>(pointsY, minMaxWorkingList);
       firstTime = false;
@@ -316,7 +316,7 @@ int main(int argc, char *argv[]){
 
   // Find Max Y
   firstTime = true;
-  for(int i = no_of_points/2; i > 1024; i /= 2){
+  for(int i = no_of_points/2; i > 512; i /= 2){
     if(firstTime){
       calculateMax_single_iteration<<<i/512, 512>>>(pointsY, minMaxWorkingList);
       firstTime = false;
