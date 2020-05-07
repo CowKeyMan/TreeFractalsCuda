@@ -28,10 +28,16 @@ __global__ void calculate_points(
   const int iterations,
   const float length_multiplier,
   const int rotation_angle_degrees,
-  float *sin_map,
-  float *cos_map
+  float *_sin_map,
+  float *_cos_map
 )
 {
+  __shared__ float sin_map[512];
+  __shared__ float cos_map[512];
+  sin_map[threadIdx.x] = _sin_map[threadIdx.x];
+  cos_map[threadIdx.x] = _cos_map[threadIdx.x];
+  __syncthreads();
+
   float line_length = 1*length_multiplier;
 
   const unsigned long index = blockIdx.x * blockDim.x + threadIdx.x;
@@ -219,8 +225,7 @@ int main(int argc, char *argv[]){
 
   // Declare sin and cosine maps
   float *sin_map, *cos_map;
-  const int map_size = (360 + 360%32); // 32 for the warp size
-  const int map_physical_size = map_size * sizeof(float);
+  const int map_physical_size = 512 * sizeof(float);
 
   // Declare angles and pointsX and pointsY lists (stored within the gpu)
   short *angles;
@@ -253,7 +258,7 @@ int main(int argc, char *argv[]){
   cudaMalloc((void**) &minMax_X_Y, sizeof(float) * 3);
   cudaMalloc((void**) &minMaxWorkingList, float_list_size/2);
 
-  populate_sin_cos_maps<<<1, map_size>>>(sin_map, cos_map);
+  populate_sin_cos_maps<<<1, 512>>>(sin_map, cos_map);
 
   // Calculate the new points which the lines will connect to
   // Calculate the first 2048
