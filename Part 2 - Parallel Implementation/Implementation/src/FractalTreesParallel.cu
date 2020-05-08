@@ -56,7 +56,6 @@ __global__ void calculate_points(
       pointsX[array_index_plus_1] = pointsX[array_index_div_2] + line_length * sin_map[ (angles[array_index_plus_1]) ];
       pointsY[array_index_plus_1] = pointsY[array_index_div_2] + line_length * cos_map[ (angles[array_index_plus_1]) ];
     }
-    __syncthreads();
     line_length *= length_multiplier;
     __syncthreads();
   }
@@ -396,7 +395,7 @@ int main(int argc, char *argv[]){
 
   // --------- STOP TIMING PART 2 ----------
   t = jbutil::gettime() - t;
-  std::cerr << "Time taken to generate the points: " << t << "s" << endl;
+  std::cerr << "Time taken to create the image: " << t << "s" << endl;
 
   //SAVE
   char outfile[150];
