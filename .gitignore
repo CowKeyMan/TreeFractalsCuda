@@ -35,8 +35,6 @@
 
 e
 
-*.pgm
-
 .ipynb_checkpoints/
 
 *.aux
