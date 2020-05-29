@@ -1,0 +1,39 @@
+\section{Implementation and Pipeline}
+The implementation of this problem is split into several parts. First, the required user inputs are discussed:
+\begin{enumerate}
+	\item Image width $W$ - The width of the pgm image which will be the final artefact obtained by the program
+	\item Image height $H$ - The height of the output image
+	\item Length multiplier $m$ - The value by which the length of the parent will be multiplied to get the length of its children (discussed in section \ref{intro})
+	\item Rotation per iteration $\theta$ - The angle with which the child lines will diverge from that of the parent (discussed in section \ref{intro})
+	\item Number of iterations $n$ - How many generations of lines there will be. 1 means that only the first line is drawn.
+\end{enumerate}
+Next, the several stages of the pipeline to get the desired image are discussed.
+
+First, a cosine and sine list is generated, which maps an angle to its result in sine or cosine. These were generated for angles between -180 to 180 degrees, at an interval of 1, which means the angles in degrees must be an integer. This is a limitation, albeit not a harsh one, but leads to a significant optimization so that the sine and cosine function do not need to be called for each line, since these functions are computationally demanding. Instead, to get an angle after generating the map, one can simply do: $sin\_list[\theta + 180]$ to get $sin(\theta)$, and the same with cosine. This also means that the angle $\theta$ must be between -180 and 179 (both included) otherwise the index for the array will go out of bounds.
+
+After this list is generated, we can compute the points for the lines. The first two points for the first line are initialised as $(0, 0)$ and $(0, 1)$. Note how the length of the first line will always be taken as 1. This is because when synthesizing the image, the generated tree will be made to stretch to the image size, hence this initial length will not matter. This design choice was taken because it will not allow any space in the image to be wasted and more importantly so that the tree will not go out of the image bounds. To get the next 2 lines, the principle of matrix multiplication is used (hence the need of the sine and cosine maps). So the 2 new points are first placed at $(0, length_{parent} * m)$, then a rotation of $\pm parent_{angle} + \theta$ is applied and finally the position of the parent is added to these points to get their new positions. The 2 new lines will later be drawn from the end of the parent to the 2 new generated points. A list of the angles of each line also needs to be kept as the children's angle depends on the parents'.
+
+The final step before synthesising the image (drawing the lines), is to map the points from coordinate space to image/pixel space. This is needed due to image space starting at $(0, 0)$ at its top-left corner, while coordinate space has $(0,0)$ at the bottom middle. Therefore, in order to perform this conversion, the following operations are performed: 
+\\ \\
+$x_{image} = \\ x_{coordinate} * W / (x_{min} - x_{max}) + image_width/2$
+\\ \\
+$y_{image} = y_{coordinate} * - H / (y_{max} - y_{min}) + H - H*(y_{max}-y_{min}) * y_{min}$
+\\ \\\
+where $x_{max}$ and $x_{min}$ are the maximum and maximum X values in coordinate space accordingly, and the same for the Y values. Furthermore, as stated before, W is the image width and H is the image height. Note that $x_{min}$ is $-x_{max}$ since the tree is symmetric across x. Also important to state is that only the variables with subscript \textit{coordinate} are variables, while the others are constant, which leads to options for optimizations, such that the computation for each point becomes
+\\ \\
+$x_{image} = x_{coordinate} * x_{mul} + x_{add}$
+\\ \\
+and similarly for y. This will be very useful when it comes to parallelization.
+
+The final step of the pipeline is synthesizing the image. This is done by moving one pixel at a time in some axis from one point towards the other point. However, say we have only the first line to render, and we move in the x-axis. If this is done, then we end up with just 1 pixel drawn. Therefore, the approach taken is to move in the axis for which the distance between the points in that axis is biggest. So for a mostly horizontal line, we move in the x-axis, and if we have a mostly vertical line, we move pixel by pixel in the y-axis. To determine how much is needed to be moved in the other axis, this is calculated initially. To explain this better, an example is given: Say that we have 2 points, one of them at $(0, 0)$ and the other at $(2, 7)$. The first thing to notice is that the biggest difference is in the y-axis. Therefore we will move pixel by pixel from point 0 to point 7 in the y-axis. To find the corresponding x values, we find how much we need to move at each step. The formula for this is $(x_{max}-x_{min})/y_{difference} = (2-0)/7 = 0.286$, so we start at $x=0$ when $y=0$, and when y moves by 1, x moves by 0.286, then the resulting float is rounded to an integer to find the pixel position to draw. With this way, this difference is only calculated once per line. At y=7, x will be equal to 2.
+
+Therefore, in short, this is the pipeline:
+\begin{enumerate}
+	\item Populate the sin and cosine maps
+	\item Generate the points
+	\item Transform the points from coordinate space to image space
+	\item Draw the points to synthesize the image
+\end{enumerate}
+
+
+With regards to a data structure for the points, while a binary tree may be used and may be more elegant, a simpler structure is used, that of 2 arrays. The first array stores the results of the x-values while the second stores the y-values. The parent points of a child are found using the following formula: $x_{parent} = floor(x_{child}/2)$, and similarly for y. So the children of the point at index 1 has children at indexes 2 and 3, then point 2 has children at indexes 4 and 5 while 3 has children at indexes 6 and 7. Point 0 is the special starting point at $(0, 0)$. The advantage to this is that iteration may be used for calculating the points rather than recursion, and when parallelizing, it is easier to copy an array rather than a binary tree. This same structure is used for the angles for each line.

@@ -158,7 +158,6 @@ __global__ void draw_points(const float *pointsX, const float *pointsY, short *m
   const unsigned long index = blockIdx.y * gridDim.x + blockIdx.x * blockDim.x + threadIdx.x;
   const unsigned long index_div_2 = index/2;
 
-  // smaller x
   float px1 = pointsX[index];
   float px2 = pointsX[index_div_2];
   float py1 = pointsY[index];
@@ -168,8 +167,9 @@ __global__ void draw_points(const float *pointsX, const float *pointsY, short *m
   float diffX = (px1-px2)*(px1>=px2) + (px2-px1)*(px2>px1);
   float diffY = (py1-py2)*(py1>=py2) + (py2-py1)*(py2>py1);
 
-  float x_increase = ( ( 1*(diffX>=diffY) + (diffX/(diffY+(diffY==0)))*(diffX<diffY) ) * ( (px2-px1)/ (diffX+(diffX==0)) ) );
-  float y_increase = ( ( (diffY/(diffX+(diffX==0)))*(diffX>=diffY) + 1*(diffX<diffY) ) * ( (py2-py1)/(diffY+(diffY==0)) ) );
+		// last multiplication essentially gets -1 or 1 (or 0 if difference is 0) to see if we need to increase or decrease
+  float x_increase = ( 1*(diffX>=diffY) + (diffX/(diffY+(diffY==0)))*(diffX<diffY) ) * ( (px2-px1)/ (diffX+(diffX==0)) );
+  float y_increase = ( (diffY/(diffX+(diffX==0)))*(diffX>=diffY) + 1*(diffX<diffY) ) * ( (py2-py1)/(diffY+(diffY==0)) );
 
   float startx = round(px1) * (diffX>=diffY) + px1 * (diffX<diffY);
   float starty = py1 * (diffX>=diffY) + round(py1) * (diffX<diffY);
@@ -254,9 +254,6 @@ int main(int argc, char *argv[]){
   cudaMemcpy(pointsX, pointsX_host, 2*sizeof(float), cudaMemcpyHostToDevice);
   cudaMemcpy(pointsY, pointsY_host, 2*sizeof(float), cudaMemcpyHostToDevice);
 
-  cudaMalloc((void**) &minMax_X_Y, sizeof(float) * 3);
-  cudaMalloc((void**) &minMaxWorkingList, float_list_size/2);
-
   populate_sin_cos_maps<<<1, 512>>>(sin_map, cos_map);
 
   // Calculate the new points which the lines will connect to
@@ -286,7 +283,14 @@ int main(int argc, char *argv[]){
     );
   }
 
-  // Find Max X
+  cudaFree(sin_map);
+  cudaFree(cos_map);
+  cudaFree(angles);
+
+  cudaMalloc((void**) &minMax_X_Y, sizeof(float) * 3);
+  cudaMalloc((void**) &minMaxWorkingList, float_list_size/2);
+  
+		// Find Max X
   bool firstTime = true;
   for(int i = no_of_points/2; i > 512; i /= 2){
     if(firstTime){
@@ -301,7 +305,6 @@ int main(int argc, char *argv[]){
   }else{
     calculateMax<<<1, 512>>>(minMaxWorkingList, minMaxWorkingList, &minMax_X_Y[0], iterations, no_of_points/2);
   }
-  cudaError_t error = cudaGetLastError();if(error != cudaSuccess){printf("CUDA error1: %s\n", cudaGetErrorString(error));exit(-1);}
   // Find Min Y
   firstTime = true;
   for(int i = no_of_points/2; i > 512; i /= 2){
@@ -333,29 +336,20 @@ int main(int argc, char *argv[]){
   }else{
     calculateMax<<<1, 512>>>(minMaxWorkingList, minMaxWorkingList, &minMax_X_Y[2], iterations, no_of_points/2);
   }
-  float maxX_minY_maxY[3];
+  
+		float maxX_minY_maxY[3];
   cudaMemcpy(maxX_minY_maxY, minMax_X_Y, sizeof(float) * 3, cudaMemcpyDeviceToHost);
-  float x_mul = (maxX_minY_maxY[0] == 0)? 1: (image_width-1)/(maxX_minY_maxY[0]*2);
+
+  cudaFree(minMax_X_Y);
+  cudaFree(minMaxWorkingList);
+  
+		float x_mul = (maxX_minY_maxY[0] == 0)? 1: (image_width-1)/(maxX_minY_maxY[0]*2);
   float x_add = (image_width-1)/2.0f;
   float y_mul = (maxX_minY_maxY[2]==maxX_minY_maxY[1])? (image_height-1) : -(image_height-1)/(maxX_minY_maxY[2] - maxX_minY_maxY[1]);
   float y_add = (maxX_minY_maxY[2]==maxX_minY_maxY[1])? 0 : (image_height-1) + (image_height-1)/(maxX_minY_maxY[2]-maxX_minY_maxY[1]) * maxX_minY_maxY[1];
 
   unsigned int blocks = no_of_points/512 + (no_of_points % 512 != 0);
   map_points_to_pixels<<<blocks, ((no_of_points<512)? no_of_points : 512)>>>(pointsX, pointsY, x_mul, x_add, y_mul, y_add);
-
-  short *a = (short*)malloc(short_list_size);
-  float *px = (float*)malloc(float_list_size);
-  float *py = (float*)malloc(float_list_size);
-  cudaMemcpy(a, angles, short_list_size, cudaMemcpyDeviceToHost);
-  cudaMemcpy(px, pointsX, float_list_size, cudaMemcpyDeviceToHost);
-  cudaMemcpy(py, pointsY, float_list_size, cudaMemcpyDeviceToHost);
-
-  // Clean up
-  cudaFree(sin_map);
-  cudaFree(cos_map);
-  cudaFree(angles);
-  cudaFree(minMax_X_Y);
-  cudaFree(minMaxWorkingList);
 
   // --------- STOP TIMING PART 1 ----------
   t = jbutil::gettime() - t;
