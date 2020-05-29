@@ -281,6 +281,7 @@ int main(int argc, char *argv[]){
       cos_map,
       i
     );
+				line_length *= length_multiplier;
   }
 
   cudaFree(sin_map);
