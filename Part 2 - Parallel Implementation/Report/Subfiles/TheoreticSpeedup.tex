@@ -1,0 +1,31 @@
+\section{Theoretic Speed-up}
+In this section we see what the theoretic speed-up should be of the parallel implementation. We do this for part 1 of our problem, as part 2 is difficult to predict due to a loop where the number of times when this will execute will depend on all of our factors, and will be different for every thread as. We further split part 1 into its different functions to see how long each should take. This is done by checking how many operations of a certain item could be completed by the Titan Black, which uses compute capability 3.5 and has 15 multiprocessors.
+
+\subsection{\textit{populate\_sin\_cos\_maps}}
+Here, each thread computes a sine and a cosine function and we have 512 threads. This means that this function should take:
+
+\[\frac{N/A}{M} = \frac{512 * 2 / 32} {15} = 2.133 \quad ClockCycles\]
+
+Where 
+\begin{itemize}
+	\item N = Number of times operation O needs to execute
+	\item A = Amount of times operation O can be performed per clock cycle per multi-processor
+	\item M = Number of multi-processors
+\end{itemize}
+
+\subsection{\textit{calculate\_points}}
+Here we have to perform 3 bit shifts (if we consider multiplication of an integer by 2 also as a bit shift), 2 integer addition, 5 float additions and 4 floating point multiplication for every 2 points.
+
+\[ \frac{((3/644) + (2/160) + (5/192) + (4/192))2^{n-1}}{15} \]
+\[=4.26889*10^{-3}*2^{n-1} \quad ClockCycles\]
+
+\subsection{\textit{calculateMin} and \textit{calculateMax}}
+These 2 functions have the same operations and are executed 3 times in total for as many times as we have points. Here we have 3 integer additions and 1 multiplication, 3 bit shifts and 1 comparison, hence we get:
+
+\[3\frac{3/160 + 1/32 + 3/644 + 1/160}{15}2^{n}\]
+\[=3*0.00406056*2^n \quad ClockCycles\]
+
+\subsection{\textit{map\_points\_to\_pixels}}
+This last function has 2 float multiplications and 2 float additions per points, meaning:
+\[\frac{2/192 + 2/192}{15}2^{n}\]
+\[=\frac{1}{720}2^n \quad ClockCycles\]

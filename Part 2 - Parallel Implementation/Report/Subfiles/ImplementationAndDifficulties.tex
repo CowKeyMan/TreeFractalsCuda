@@ -53,11 +53,13 @@ The next part is to synthesize the image. The following are the steps taken:
 	
 	\item Next we initialize all the pixels to 255, by issuing as many as many threads as there are pixels, floored to the next multiple of 512, so each thread initializes a single pixel.
 	
-	\item The next step is the synthesis function. This is the most complex of all and we will see it is also the one which takes the most time. Firstly, we initialize this with as many threads as there are lines, since each line needs to be drawn on the image. Before we explain the algorithm itself, lets reiterate how we draw a line between 2 points. Quoting directly from part 1 of this assignment: "[S]ay we have only the first line to render, and we move in the x-axis. If this is done, then we end up with just 1 pixel drawn. Therefore, the approach taken is to move pixel by pixel in the axis for which the distance between the points in that axis is biggest. So for a mostly horizontal line, we move in the x-axis, and if we have a mostly vertical line, we move pixel by pixel in the y-axis." To determine how much is needed to be moved in the other axis, this is calculated by doing the distance between the points in that axis divided by the distance between the points in the bigger axis.
+	\item The next step is the synthesis function. This is the most complex of all and we will see it is also the one which takes the most time. Firstly, we initialize this with as many threads as there are lines, since each line needs to be drawn on the image. Before we explain the algorithm itself, lets reiterate how we draw a line between 2 points. Quoting directly from part 1 of this assignment: "[S]ay we have only the first line to draw, and we move in the x-axis. If this is done, then we end up with just 1 pixel drawn. Therefore, the approach taken is to move pixel by pixel in the axis for which the distance between the points in that axis is biggest. So for a mostly horizontal line, we move in the x-axis, and if we have a mostly vertical line, we move pixel by pixel in the y-axis." To determine how much is needed to be moved in the other axis, this is calculated by doing the distance between the points in that axis divided by the distance between the points in the bigger axis.
 	
 	Thus, we first find the absolute difference between the points in both the x and y axis, using the following absolute function which avoids if else statements:
 	
 	$diffX = (x1-x2)*(x1\ge x2) +\\ (x2-x1)*(x2>x1)$
 	
 	With this obtained for both the x and y axis, we find how much we need to increase (or decrease) from the first point to the second point in both axes, using a similar method without using if statements. Finally, we can draw the image. Here unfortunately we will have to use a for loop, to go from the first point to the last.
+	
+	\item Lastly we can copy the image array over to the host and clean up the remaining device memory used.
 \end{enumerate}

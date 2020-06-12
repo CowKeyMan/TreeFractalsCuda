@@ -60,6 +60,7 @@ This report is a continuation of the first Assignment of this unit. For a more d
 \end{figure}
 
 \input{Subfiles/ImplementationAndDifficulties}
+\input{Subfiles/TheoreticSpeedup}
 \input{Subfiles/Results}
 
 \section{Conclusion}
@@ -67,6 +68,17 @@ This concludes this report for the parallel implementation of creating tree frac
 
 \bibliography{main}
 \bibliographystyle{ieeetr}
+
+\onecolumn
+\section*{Appendix}
+\appendix
+\section{Profiler output}
+\begin{figure}[H]
+	\includegraphics[width=.95\linewidth]{Images/500x500_1_90_26_profilerOutput.png}
+	\centering
+	\caption{Profiler timeline output for parameters WxH=500x500 m=1 $\theta$=90 n=26 both with sin and cosine in shared memory and without in the \textit{compute\_points} function (no difference was found)}
+	\label{fig:profiler}
+\end{figure}
 
 \pagebreak
 
