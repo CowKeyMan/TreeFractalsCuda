@@ -19,8 +19,8 @@ Next we compare the speed it takes for the two parts when they are run serially 
 	\label{fig:timing}
 \end{figure*}
 
-With regards to further optimization on the parallel side, it was found to be difficult to optimise further. When the sine and cosine maps were added to shared memory, this did not make a noticeable difference in performance. Since we are avoiding conditional statements, warp divergence should be pretty low. Memory management is also being taken care of properly, such as only using items in the host and devices when they are needed, and not making unnecessary data transfers. This optimization is reflected in the obtained performance results as we obtain a noticeable speed-up.
+With regards to further optimization on the parallel side, it was found to be difficult to optimise further. When the sine and cosine maps were added to shared memory, this did not make a noticeable difference in performance. We also avoid warp divergence as much as possible given the problem. Memory management is also being taken care of properly, by only using items in the host and devices when they are needed in the respective device, freeing memory as soon when it is no longer in use and avoiding unnecessary data transfers. These optimizations are reflected in the obtained performance results as we obtain a noticeable speed-up.
 
-When the profiler timeline was observed (Appendix A) it was determined that most of the time taken is to draw the points.This time increases even further if we increase the image size.
+When the profiler timeline was observed (Appendix A) it was determined that most of the time taken is to draw the points. This time increases even further if we increase the image size.
 
 If we compare the rough theoretic speed to the practical speed for part 1, lets say that we do this for 26 iterations, in the theoretic we get 1053948 ClockCycles, which, given each processor works at 980MHz, this should theoretically take 0.001075 seconds, however ends up taking 0.12647 seconds. This is most likely due to the needs of synchronization, and having to make multiple kernel calls, not to mention memory allocation.

@@ -1,5 +1,5 @@
 \section{Theoretic Speed-up}
-In this section we see what the theoretic speed-up should be of the parallel implementation. We do this for part 1 of our problem, as part 2 is difficult to predict due to a loop where the number of times when this will execute will depend on all of our factors, and will be different for every thread as. We further split part 1 into its different functions to see how long each should take. This is done by checking how many operations of a certain item could be completed by the Titan Black, which uses compute capability 3.5 and has 15 multiprocessors.
+In this section we see what the theoretic speed-up should be of the parallel implementation. We do this for part 1 of our problem, as part 2 is difficult to predict due to a loop where the number of operations is difficult to determine. We further split part 1 into its different functions to see how long each should take. This is done by checking how many operations need to be computed by the Titan Black, which uses compute capability 3.5 and has 15 multiprocessors.
 
 \subsection{\textit{populate\_sin\_cos\_maps}}
 Here, each thread computes a sine and a cosine function and we have 512 threads. This means that this function should take:

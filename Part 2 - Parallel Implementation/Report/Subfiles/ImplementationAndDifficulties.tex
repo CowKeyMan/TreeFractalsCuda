@@ -1,5 +1,5 @@
 \section{Implementation}
-As in the first part, we separate this problem into 2 parts, and then further separated into a pipeline. We do a similar separation in this section. In the first part we generate the points, and in the second part we render them. The pipelines for the 2 parts however will however slightly differ. With regards to the inputs, these are the same as the serial implementation (note that we do not have an initial length as this is inconsequential, due to us stretching the image to fit the image):
+As in the first component of this project, we separate this problem into 2 parts, and then further separate it into a pipeline. In the first part we generate the points, and in the second part we render them. The pipelines for the 2 parts however will however slightly differ. With regards to the inputs, these are the same as the serial implementation (note that we do not have an initial length as this is inconsequential, due to us stretching the image to fit the image):
 
 \begin{itemize}
 	\item Output Image Width W
@@ -9,7 +9,7 @@ As in the first part, we separate this problem into 2 parts, and then further se
 	\item Number of iterations n
 \end{itemize}
 
-The following is the pipeline for the first part of the problem. We put a maximum kernel threads at 512, the reason for this is to make it compatible with older hardware.
+The following is the pipeline for the first part of the problem. We put a maximum kernel threads at 512, the reason for this is to make the code compatible with older hardware.
 
 \begin{enumerate}
 	\item Allocate memory in the device for the cosine and sine maps, which map an angle in degrees to an angle in radians. Thus these are of type \textit{float}. We make these of size 512 each so as to avoid warp divergence later on. Thus we have to allocate $4\ bytes * 512 * 2 = 4KB$ for these, which is very small, and thus can fit in shared memory.
@@ -18,11 +18,11 @@ The following is the pipeline for the first part of the problem. We put a maximu
 	
 	\item Initialize first 2 indexes of the angles and coordinates with both degrees being 0, and the first 2 coordinates being $(0,0)$ and $(0,1)$, representing a straight line straight trough the middle of the image. This is done by simply making an array of size 2 for each of the three lists in the host, then copying them over to the device.
 	
-	\item Populate the sine and cosine maps, by calling a kernel with 512 threads, where each thread initializes a single index of each map. 512 is a good thread number since it is a multiple of 32 (warp size).
+	\item Populate the sine and cosine maps, by calling a kernel with 1 block of 512 threads, where each thread initializes a single index of each map. 512 is a good thread number since it is a multiple of 32 (warp size).
 	
-	\item The next step is to calculate the coordinates. This is divided into two steps for optimisation. The first step is to calculate the first 2048 coordinates. This is done in a single kernel call, with 512 threads. At each step, we compute as much as was computed at the previous step * 2. This is because index i depends on $\lfloor i\%2 \rfloor$. Thus we need to compute the coordinates iteration by iteration, doing a \textit{syncthreads} call after each one, which is an unfortunate limitation to our problem. Each thread computes 2 coordinates. We say that we calculate the first 2048 points because 512 threads can compute up to 1024 coordinate at the same time, however the first 1024 coordinates are computed by the first few iterations, with 512 coordinates being computed by the iteration before the last. As an optimization, whose performance improvement will be discussed in the next section, we put the sine and cosine maps in shared memory. This is the reason we used a list of size 512 for these, so that we can avoid an if statement, and each thread can perform one calculation without running into problems.
+	\item The next step is to calculate the coordinates. This is divided into two steps for optimisation. The first step is to calculate the first 2048 coordinates. This is done in a single kernel call, with 1 block of 512 threads. At each step, we compute as much as was computed at the previous step * 2. This is because index i depends on $\lfloor i/2 \rfloor$. Thus we need to compute the coordinates iteration by iteration, doing a \textit{syncthreads} call after each one, which is an unfortunate limitation to our problem. Each thread computes 2 coordinates. We say that we calculate the first 2048 points because 512 threads can compute up to 1024 coordinate at the same time, however the first 1024 coordinates are computed by the first few iterations, with 512 coordinates being computed by the iteration before the last. As an optimization, whose performance improvement will be discussed in the next section, we put the sine and cosine maps in shared memory. This is the reason we used a list of size 512 for these, so that we can avoid an if statement, and each thread can perform one calculation without running into problems.
 	
-	After these first 2048 coordinates, we must synchronize the iterations by issuing separate kernel calls. Thus, each call has as many threads as there are coordinates to compute (divided by 2 since each thread computes 2 points). We keep the number of threads per kernel at 512, and multiply the number of kernels by 2 for each iteration.
+	After these first 2048 coordinates, we must synchronize the iterations by issuing separate kernel calls. Thus, each call has as many threads as there are coordinates to compute (divided by 2 since each thread computes 2 points). We keep the number of threads per block at 512, and multiply the number of blocks by 2 for each kernel-call/iteration.
 	
 	\item Since we will not need them any more, we can free the memory allocated for the sine map, the cosine map and the angles list.
 	
@@ -37,9 +37,9 @@ The following is the pipeline for the first part of the problem. We put a maximu
 	
 	Here is what is happening, with an example. Lets say that we have a list where: list[10] = 58, list[11] = 100, and we need to compare indexes 10 and 11. The result of these will go to list[5], hence it would be performed by thread 5. Thus, we have:\\
 	$list[5] = list[5*2+(58<60)]$\\
-	Since 60 is greater than 58, the expression $58<60$ will return 1, and thus we end up with $list[5] = list[11]$, which is what is desired. Meanwhile, we would have ended up with $list[5] = list[10]$ if $list[10]$ was greater than (or equal to) $list[11]$. Consequently, we avoid if statements and thus warp divergence.
+	Since 60 is greater than 58, the expression $58<60$ will return 1, and thus we end up with $list[5] = list[11]$, which is what is desired. Meanwhile, we would have ended up with $list[5] = list[10]$ if $list[10]$ was greater than (or equal to) $list[11]$. Consequently, we avoid conditional statements and thus warp divergence.
 	
-	\item After finding the minimum and maximum, we can now copy these over to the host to perform 4 calculations which we will need to convert the coordinates from coordinate space to image pixel space. At this point, we can also free the arrays we used for finding the minimum and maximum values.
+	\item After finding the minimum and maximum, we can now copy these over to the host to perform 4 calculations which we will need to convert the coordinates from coordinate space to image/pixel space. At this point, we can also free the arrays we used for finding the minimum and maximum values.
 	
 	\item The final function we need to do is to convert the coordinates to image space. To do this we launch as many threads as we have points and each thread does a simple multiplication and addition to map to pixel space.
 \end{enumerate}
@@ -51,15 +51,15 @@ The next part is to synthesize the image. The following are the steps taken:
 \begin{enumerate}
 	\item Allocate an array of short in the device memory of size $W*H$. These represent our pixels. The value of these pixels will be 0 or 255, 0 meaning black and 255 meaning white.
 	
-	\item Next we initialize all the pixels to 255, by issuing as many as many threads as there are pixels, floored to the next multiple of 512, so each thread initializes a single pixel.
+	\item Next we initialize all the pixels to 255, by issuing as many as many threads as there are pixels, ceiled to the next multiple of 512, so each thread initializes a single pixel.
 	
-	\item The next step is the synthesis function. This is the most complex of all and we will see it is also the one which takes the most time. Firstly, we initialize this with as many threads as there are lines, since each line needs to be drawn on the image. Before we explain the algorithm itself, lets reiterate how we draw a line between 2 points. Quoting directly from part 1 of this assignment: "[S]ay we have only the first line to draw, and we move in the x-axis. If this is done, then we end up with just 1 pixel drawn. Therefore, the approach taken is to move pixel by pixel in the axis for which the distance between the points in that axis is biggest. So for a mostly horizontal line, we move in the x-axis, and if we have a mostly vertical line, we move pixel by pixel in the y-axis." To determine how much is needed to be moved in the other axis, this is calculated by doing the distance between the points in that axis divided by the distance between the points in the bigger axis.
+	\item The next step is the synthesis function. This is the most complex of all and we will see it is also the one which takes the most time. Firstly, we initialize this with as many threads as there are lines, ceiled to 512, since each line needs to be drawn on the image. Before we explain the algorithm itself, lets reiterate how we draw a line between 2 points. Quoting directly from part 1 of this assignment: "[S]ay we have only the first line to draw,[which is a vertical straight line], and we move in the x-axis. If this is done, then we end up with just 1 pixel drawn. Therefore, the approach taken is to move pixel by pixel in the axis for which the distance between the points in that axis is biggest. So for a mostly horizontal line, we move in the x-axis, and if we have a mostly vertical line, we move pixel by pixel in the y-axis." To determine how much is needed to be moved in the other axis, this is calculated by doing the distance between the points in that axis divided by the distance between the points in the bigger axis.
 	
-	Thus, we first find the absolute difference between the points in both the x and y axis, using the following absolute function which avoids if else statements:
+	Thus, we first find the absolute difference between the points in both the x and y axis, using the following absolute function which avoids conditional statements:
 	
 	$diffX = (x1-x2)*(x1\ge x2) +\\ (x2-x1)*(x2>x1)$
 	
-	With this obtained for both the x and y axis, we find how much we need to increase (or decrease) from the first point to the second point in both axes, using a similar method without using if statements. Finally, we can draw the image. Here unfortunately we will have to use a for loop, to go from the first point to the last.
+	With this obtained for both the x and y axis, we find how much we need to increase (or decrease) from the first point to the second point in both axes, using a similar method without using conditional statements. Finally, we can draw the image. Here unfortunately we will have to use a for loop, to go from the first point to the last.
 	
 	\item Lastly we can copy the image array over to the host and clean up the remaining device memory used.
 \end{enumerate}

@@ -50,7 +50,7 @@
 \maketitle
 
 \section{Introduction} \label{intro}
-This report is a continuation of the first Assignment of this unit. For a more detailed introduction of the problem, refer to that. In this second part we implement the same binary tree fractal but using CUDA, such that we run it in parallel on the GPU, rather than serially on CPU. Benchmarks on GPU and CPU were made on a \textit{GeForce GTX TITAN Black} and an \textit{Intel (R) Core (TM) i5 CPU 760 2.8GHz} respectively. An image of an example target tree is to be found in Figure \ref{general explanation}. This report will first discuss the implementation and optimizations made alongside difficulties inherent with the problem itself, followed by a comparison of results between the parallel and serial implementation.Any graphs shown will be made using using Matplotlib \cite{matplotlib}.
+This report is a continuation of the first Assignment of this unit. For a more detailed introduction to the problem, this can be found in part 1. In this second part we implement the same binary tree fractal but using CUDA, such that we run it in parallel on the GPU, rather than serially on CPU. Benchmarks on GPU and CPU were made on a \textit{GeForce GTX TITAN Black} and an \textit{Intel (R) Core (TM) i5 CPU 760 2.8GHz} respectively. An image of an example target tree is  found in Figure \ref{general explanation}. This report will first discuss the implementation and optimizations made alongside difficulties inherent with the problem itself, followed by a comparison of results between the parallel and serial implementation.Any graphs shown will be made using using Matplotlib \cite{matplotlib}.
 
 \begin{figure}
 	\includegraphics[width=.95\linewidth]{Images/GeneralExplanation.png}
@@ -64,7 +64,7 @@ This report is a continuation of the first Assignment of this unit. For a more d
 \input{Subfiles/Results}
 
 \section{Conclusion}
-This concludes this report for the parallel implementation of creating tree fractals. A description of how this solution can be implemented in parallel was discussed. Difficulties and Shortcomings of the algorithm were discussed and a comparison to the serial implementation was shown so as to show the obtained speed-up and scalability.
+This concludes this report for the parallel implementation of creating tree fractals. A description of how this solution can be implemented in parallel on GPU using CUDA was discussed. Difficulties and Shortcomings of the algorithm were discussed and a comparison to the serial implementation was shown so as to show the obtained speed-up and scalability.
 
 \bibliography{main}
 \bibliographystyle{ieeetr}
